@@ -1,0 +1,4 @@
+lightning
+wandb
+torch
+torchvision

@@ -112,6 +112,7 @@ class ChannelAttention(nn.Module):
         super(ChannelAttention, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.max_pool = nn.AdaptiveMaxPool2d(1)
+        # replacing Flatten and Linear with 2 Conv2d  for MLP can have same result with lower parameter
         self.fc = nn.Sequential(
             nn.Conv2d(channel, channel // reduction, 1, bias=False),
             nn.ReLU(inplace=True),
