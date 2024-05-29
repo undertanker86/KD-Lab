@@ -10,12 +10,13 @@ import torch.nn as nn
 import torch
 import torch.nn.init as init
 
-
+# This calculates the number of parameters in a model
 def cal_param_size(model):
     return sum([i.numel() for i in model.parameters()])
 
 
 count_ops = 0
+# This measures the number of operations in a model
 def measure_layer(layer, x, multi_add=1):
     delta_ops = 0
     type_name = str(layer)[:str(layer).find('(')].strip()

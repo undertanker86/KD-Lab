@@ -1,6 +1,6 @@
 from torch import nn
 import torch
-from block import *
+from custom_block import *
 
 
 class MobileNetv1(nn.Module):

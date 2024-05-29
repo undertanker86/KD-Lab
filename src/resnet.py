@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 from typing import Type, Any, Callable, Union, List, Optional
-from block import CBAM
+from customblock import CBAM
 from torch.utils import model_zoo
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
@@ -236,12 +236,12 @@ class ResNet(nn.Module):
         self.base_width = width_per_group
         if self.dataset_type == 'imagenet':
             self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
-            
+            self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         elif self.dataset_type == 'cifar':
             self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False)
         else:
             raise NotImplementedError
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        
         if attn_type == 'cbam':
             self.bam1 = CBAM(64*block.expansion, 16)
             self.bam2 = CBAM(128*block.expansion, 16)
@@ -254,7 +254,7 @@ class ResNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         # self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
-        
+        inplanes_head3 = self.inplanes # 64*block.expansion
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
 
         inplanes_head2 = self.inplanes # 128*block.expansion
@@ -266,6 +266,7 @@ class ResNet(nn.Module):
 
         self.net_channel = [64*block.expansion, 128*block.expansion, 256*block.expansion, 512*block.expansion]
         if len(branch_layers) != 0:
+
             self.inplanes = inplanes_head2
             self.layer3_head2 = self._make_layer(block, 256, branch_layers[0][0], stride=2)
             self.layer4_head2 = self._make_layer(block, 512, branch_layers[0][1], stride=2)
@@ -342,21 +343,21 @@ class ResNet(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-        # if self.dataset_type == 'imagenet':
-        x = self.maxpool(x)
+        if self.dataset_type == 'imagenet':
+            x = self.maxpool(x)
 
         x = self.layer1(x)
         f1 = x
-        if self.bam1 is not None:
-            x = self.bam1(x)
+        # if self.bam1 is not None:
+        #     x = self.bam1(x)
         x = self.layer2(x)
         f2 = x
-        if self.bam2 is not None:
-            x = self.bam2(x)
+        # if self.bam2 is not None:
+        #     x = self.bam2(x)
         x = self.layer3(x)
         f3 = x
-        if self.bam3 is not None:
-            x = self.bam3(x)
+        # if self.bam3 is not None:
+        #     x = self.bam3(x)
         x = self.layer4(x)
         f4 = x
         
@@ -367,6 +368,8 @@ class ResNet(nn.Module):
         logits = self.fc(x)
 
         if len(self.branch_layers) != 0:
+
+
             x = self.layer3_head2(f2)
             x = self.layer4_head2(x)
             out2 = x
