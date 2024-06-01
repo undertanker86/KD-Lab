@@ -9,12 +9,12 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-from resnet_2021 import resnet18_cbam
+from src.resnet_2021 import resnet18_cbam
 from torchmetrics import Accuracy
 from torchvision import datasets, transforms
 from torchvision.transforms import v2 as v2_transforms
 
-from src.method import BYOT, KD, Similarity
+from src.method import BYOT, DistilKL, Similarity
 
 
 class CIFARDataModule(pl.LightningDataModule):
@@ -77,7 +77,7 @@ class CIFARModel(pl.LightningModule):
         self.dataset_name = dataset_name
         self.model = resnet18_cbam(pretrained=False)
         self.seed = seed
-        self.logger = WandbLogger()
+
 
 
         self.optimize_method = optimize_method
@@ -100,7 +100,7 @@ class CIFARModel(pl.LightningModule):
     def forward(self, x):
         return self.model(x)
    
-    def train_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx):
         inputs, labels = batch
         outputs, outputs_feature = self.forward(inputs)
 
@@ -110,7 +110,7 @@ class CIFARModel(pl.LightningModule):
         teacher_feature = outputs_feature[0].detach()
 
         for index in range(1, len(outputs)):
-            loss += KD(outputs_feature[index], teacher_feature, self.temperature)
+            loss += DistilKL(outputs_feature[index], teacher_feature, self.temperature)
             loss += self.criterion(teacher_output, outputs[index]) * (1 - self.final_loss_coeff_dict[1])
 
         loss /= len(outputs)
@@ -157,15 +157,28 @@ class CIFARModel(pl.LightningModule):
     def validation_step(self, batch, batch_idx) -> torch.Tensor | os.Mapping[str, torch.Any] | None:
         inputs, labels = batch
         outputs, outputs_feature = self.forward(inputs)
-        acc = (outputs[0].argmax(dim=1) == labels).float().mean()
-        acc1 = (outputs[1].argmax(dim=1) == labels).float().mean()
-        acc2 = (outputs[2].argmax(dim=1) == labels).float().mean()
-        acc3 = (outputs[3].argmax(dim=1) == labels).float().mean()
-        self.log('val_acc1', acc1)
-        self.log('val_acc2', acc2)
-        self.log('val_acc3', acc3)
 
-        self.log('val_acc', acc)
+        if len(outputs) > 0:
+            acc = (outputs[0].argmax(dim=1) == labels).float().mean()
+            
+            acc1 = (outputs[1].argmax(dim=1) == labels).float().mean()
+            acc2 = (outputs[2].argmax(dim=1) == labels).float().mean()
+            acc3 = (outputs[3].argmax(dim=1) == labels).float().mean()
+            self.log('val_acc', acc)
+            self.log('val_acc1', acc1)
+            self.log('val_acc2', acc2)
+            self.log('val_acc3', acc3)
+
+        else:
+            acc = torch.tensor(0.0)
+            self.log('val_acc', torch.tensor(0.0))
+            self.log('val_acc1', torch.tensor(0.0))
+            self.log('val_acc2', torch.tensor(0.0))
+            self.log('val_acc3', torch.tensor(0.0))
+
+        return acc  
+
+        
 
     def criterion(self, outputs, labels):
         return torch.nn.CrossEntropyLoss()(outputs, labels)

@@ -1,4 +1,6 @@
 # This file is for paper 2022 toward compact neural network
+import sys
+sys.path.append('..')
 
 from customblock import CBAM, DepthwiseSeparableConv2d
 from resnet import BasicBlock, Bottleneck,PreActBlock, conv3x3, conv1x1 
