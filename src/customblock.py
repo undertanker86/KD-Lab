@@ -23,11 +23,11 @@ class DepthwiseSeparableConv2d(nn.Module):
     
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
-        hidden_channels = int(planes * base_width)
+        hidden_channels = int(planes)
         self.conv1 = nn.Sequential(
             nn.Conv2d(
                 inplanes,
-                hidden_channels,
+                hidden_channels*self.expansion,
                 kernel_size=3,
                 stride=stride,
                 padding=1,

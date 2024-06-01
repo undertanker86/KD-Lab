@@ -274,14 +274,16 @@ class CifarResNet2021(nn.Module):
         out3 = x
         x = self.layer4(x)
         out4 = x
+        
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         logit = self.fc(x)    
         if len(self.branch_layers)!= 0:
             f1 = self.branch_layer1(out1)
+            
             f2 = self.branch_layer2(out2)
             f3 = self.branch_layer3(out3)
-
+            
             
         
             return logit,[f1,f2,f3,out4]
@@ -305,7 +307,7 @@ class ResnetAuxiliary(nn.Module):
         if self.ensemble:
             ensemble_feature = torch.stack(aux_feature).mean(dim=0)
             ensemble_logit = self.final_classifier(aux_feature)
-            return ensemble_logit, ensemble_feature
+            return ensemble_logit, ensemble_feature 
         return aux_logit, aux_feature
 
 
@@ -334,6 +336,8 @@ def resnet18_cbam(pretrained: bool = False, **kwargs: Any) -> CifarResNet2021:
 if __name__ == '__main__':
     x = torch.randn(1, 3, 32, 32)
     model = resnet18_cbam(pretrained=False)
-    y = model(x)
-    for i, j in enumerate(y):
-        print(i, j.shape)
+    print(model)
+    # import torchviz
+    # torchviz.make_dot(y[0].mean(), params=dict(list(model.named_parameters()))).render("resnet18_cbam", format="png")
+    # for i, j in enumerate(y):
+    #     print(i, j.shape)
