@@ -77,7 +77,7 @@ class CIFARModel(pl.LightningModule):
         self.dataset_name = dataset_name
         self.model = resnet18_cbam(pretrained=False)
         self.seed = seed
-
+        self.criterion = torch.nn.CrossEntropyLoss()
 
 
         self.optimize_method = optimize_method
@@ -103,26 +103,27 @@ class CIFARModel(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         inputs, labels = batch
         outputs, outputs_feature = self.forward(inputs)
-
+        total = 0.0
+        total += float(labels.size(0))
         loss = torch.FloatTensor([0.]).to(self.device)
         loss += self.criterion(outputs[0], labels)
         teacher_output = outputs[0].detach()
         teacher_feature = outputs_feature[0].detach()
-
+        correct = [0 for i in range(len(outputs))]
         for index in range(1, len(outputs)):
             loss += DistilKL(outputs_feature[index], teacher_feature, self.temperature)
             loss += self.criterion(teacher_output, outputs[index]) * (1 - self.final_loss_coeff_dict[1])
 
         loss /= len(outputs)
-        acc  = (outputs[0].argmax(dim=1) == labels).float().mean()
-        acc1 = (outputs[1].argmax(dim=1) == labels).float().mean()
-        acc2 = (outputs[2].argmax(dim=1) == labels).float().mean()
-        acc3 = (outputs[3].argmax(dim=1) == labels).float().mean()
-        self.log('train_loss', loss)
-        self.log('train_acc', acc)
-        self.log('train_acc1', acc1)
-        self.log('train_acc2', acc2)
-        self.log('train_acc3', acc3)
+        for classifier_index in range(len(outputs)):
+            _, outputs[classifier_index] = torch.max(outputs[classifier_index].data, 1)
+            correct[classifier_index] += float(outputs[classifier_index].eq(labels.data).cpu().sum())
+
+        self.log("train_loss", loss)
+        self.log("train_accuracy", 100 * correct[0] / total)
+        self.log("train_accuracy_1", 100 * correct[1] / total)
+        self.log("train_accuracy_2", 100 * correct[2] / total)
+        self.log("train_accuracy_3", 100 * correct[3] / total)
         return loss
     
     def configure_optimizers(self):
@@ -158,37 +159,25 @@ class CIFARModel(pl.LightningModule):
         inputs, labels = batch
         outputs, outputs_feature = self.forward(inputs)
 
-        if len(outputs) > 0:
-            acc = (outputs[0].argmax(dim=1) == labels).float().mean()
-            
-            acc1 = (outputs[1].argmax(dim=1) == labels).float().mean()
-            acc2 = (outputs[2].argmax(dim=1) == labels).float().mean()
-            acc3 = (outputs[3].argmax(dim=1) == labels).float().mean()
-            self.log('val_acc', acc)
-            self.log('val_acc1', acc1)
-            self.log('val_acc2', acc2)
-            self.log('val_acc3', acc3)
+        total = 0.0
+        total += float(labels.size(0))
+        correct = [0 for i in range(len(outputs))]
+        for index in range(0, len(outputs)):
+            _, outputs[index] = torch.max(outputs[index].data, 1)
+            correct[index] += float(outputs[index].eq(labels.data).cpu().sum())
 
-        else:
-            acc = torch.tensor(0.0)
-            self.log('val_acc', torch.tensor(0.0))
-            self.log('val_acc1', torch.tensor(0.0))
-            self.log('val_acc2', torch.tensor(0.0))
-            self.log('val_acc3', torch.tensor(0.0))
-
-        return acc  
+        for classifier_index in range(len(outputs)):
+            self.log("val_accuracy_{}".format(classifier_index), 100 * correct[classifier_index] / total)
 
         
 
-    def criterion(self, outputs, labels):
-        return torch.nn.CrossEntropyLoss()(outputs, labels)
 
 
 
     
 
 def train(
-    data_dir: str = "/data",
+    data_dir: str = "data",
     batch_size: int = 512,
     num_workers: int = 2,
     num_gpu_used: int = 1,
