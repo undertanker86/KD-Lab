@@ -27,7 +27,7 @@ class DepthwiseSeparableConv2d(nn.Module):
         self.conv1 = nn.Sequential(
             nn.Conv2d(
                 inplanes,
-                hidden_channels*self.expansion,
+                inplanes,
                 kernel_size=3,
                 stride=stride,
                 padding=1,
@@ -39,7 +39,7 @@ class DepthwiseSeparableConv2d(nn.Module):
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(
-                hidden_channels,
+                inplanes,
                 planes,
                 kernel_size=1,
                 bias=False,
