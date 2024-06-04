@@ -237,9 +237,7 @@ class Model(nn.Module):
         return out
 
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+
 
 def conv_3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
@@ -293,6 +291,48 @@ class BasicBlock(nn.Module):
         return out
 
 
+class Bottleneck(nn.Module):
+    expansion = 4
+    __constants__ = ['downsample']
+
+    def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1,
+                 base_width=64, dilation=1, norm_layer=None):
+        super(Bottleneck, self).__init__()
+        if norm_layer is None:
+            norm_layer = nn.BatchNorm2d
+        width = int(planes * (base_width / 64.)) * groups
+        # Both self.conv2 and self.downsample layers downsample the input when stride != 1
+        self.conv1 = conv_1x1(inplanes, width)
+        self.bn1 = norm_layer(width)
+        self.conv2 = conv_3x3(width, width, stride, groups, dilation)
+        self.bn2 = norm_layer(width)
+        self.conv3 = conv_1x1(width, planes * self.expansion)
+        self.bn3 = norm_layer(planes * self.expansion)
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        self.stride = stride
+
+    def forward(self, x):
+        identity = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
+
+        if self.downsample is not None:
+            identity = self.downsample(x)
+
+        out += identity
+        out = self.relu(out)
+
+        return out
 
 
 
@@ -318,7 +358,7 @@ class SepConv(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, layers, num_classes=100, zero_init_residual=False,
+    def __init__(self, block, layers, num_classes=100, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
                  norm_layer=None):
         super(ResNet, self).__init__()
@@ -342,32 +382,29 @@ class ResNet(nn.Module):
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.layer1 = self._make_layer(64, layers[0])
-        self.layer2 = self._make_layer(128, layers[1], stride=2,
+        self.layer1 = self._make_layer(block, 64, layers[0])
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2,
                                        dilate=replace_stride_with_dilation[0])
-        self.layer3 = self._make_layer(256, layers[2], stride=2,
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2,
                                        dilate=replace_stride_with_dilation[1])
-        self.layer4 = self._make_layer(512, layers[3], stride=2,
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2,
                                        dilate=replace_stride_with_dilation[2])
 
-        # FGW models
-        """
-        self.fgw1 = Model(64, num_classes)
-        self.fgw2 = Model(128, num_classes)
-        self.fgw3 = Model(256, num_classes)
-        self.fgw4 = Model(512, num_classes)
-        """
+        self.expans = block.expansion
+        self.cbam1 = CBAM(64*self.expans, 64*self.expans)
+        self.cbam2 = CBAM(128*self.expans, 128*self.expans)
+        self.cbam3 = CBAM(256*self.expans, 256*self.expans)
+        # last conv to down to num_classes
+        self.last_conv = conv3x3(512*self.expans, num_classes)
+        #self.last_conv = nn.Linear(512*self.expans, num_classes)
+        # global avg-pooling
+        self.avgp = nn.AdaptiveAvgPool2d((1, 1))
 
-        self.block1_fgw = nn.Sequential(Block(64, 128), Block(128, 256), Block(256, 512))
-        self.block2_fgw = nn.Sequential(Block(128, 256), Block(256, 512))
-        self.block3_fgw = Block(256, 512)
-        self.block4_fgw = Block(512, 512, keep_dim=False)
 
-        self.fc1 = nn.Linear(512, num_classes)
-        self.fc2 = nn.Linear(512, num_classes)
-        self.fc3 = nn.Linear(512, num_classes)
-        self.fc4 = nn.Linear(512, num_classes)
+        self.block1_fgw = nn.Sequential(Block(64*self.expans, 128*self.expans), Block(128*self.expans, 256*self.expans), Block(256*self.expans, 512*self.expans, keep_dim=False))
+        self.block2_fgw = nn.Sequential(Block(128*self.expans, 256*self.expans), Block(256*self.expans, 512*self.expans, keep_dim=False))
+        self.block3_fgw = nn.Sequential(Block(256*self.expans, 512*self.expans, keep_dim=False))
+
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -380,47 +417,25 @@ class ResNet(nn.Module):
         # so that the residual branch starts with zeros, and each residual block behaves like an identity.
         # This improves the model by 0.2~0.3% according to https://arxiv.org/abs/1706.02677
 
-    """
-    def _make_layer(self, planes, blocks, stride=1, dilate=False):
-        downsample = None
-        previous_dilation = self.dilation
-        if dilate:
-            self.dilation *= stride
-            stride = 1
-        if stride != 1 or self.inplanes != planes:
-            downsample = nn.Sequential(
-                conv_1x1(self.inplanes, planes, stride),
-                self._norm_layer(planes),
-            )
-
-        layers = []
-        layers.append(BasicBlock(self.inplanes, planes, stride, downsample))
-        self.inplanes = planes
-        for _ in range(1, blocks):
-            layers.append(BasicBlock(self.inplanes, planes))
-
-        return nn.Sequential(*layers)
-    """
-
-    def _make_layer(self, planes, blocks, stride=1, dilate=False):
+    def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
         norm_layer = self._norm_layer
         downsample = None
         previous_dilation = self.dilation
         if dilate:
             self.dilation *= stride
             stride = 1
-        if stride != 1 or self.inplanes != planes * BasicBlock.expansion:
+        if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                conv_1x1(self.inplanes, planes * BasicBlock.expansion, stride),
-                norm_layer(planes * BasicBlock.expansion),
+                conv_1x1(self.inplanes, planes * block.expansion, stride),
+                norm_layer(planes * block.expansion),
             )
 
         layers = []
-        layers.append(BasicBlock(self.inplanes, planes, stride, downsample, self.groups,
+        layers.append(block(self.inplanes, planes, stride, downsample, self.groups,
                             self.base_width, previous_dilation, norm_layer))
-        self.inplanes = planes * BasicBlock.expansion
+        self.inplanes = planes * block.expansion
         for _ in range(1, blocks):
-            layers.append(BasicBlock(self.inplanes, planes, groups=self.groups,
+            layers.append(block(self.inplanes, planes, groups=self.groups,
                                 base_width=self.base_width, dilation=self.dilation,
                                 norm_layer=norm_layer))
 
@@ -433,37 +448,43 @@ class ResNet(nn.Module):
         x = self.relu(x)
 
         x = self.layer1(x)
-        out1 = x # 64*h*w
-        out1 = self.block1_fgw(out1) #64*h*w
-        out1 = self.avgpool(out1)
-        out1 = torch.flatten(out1, 1)# 512*1*1
-    
- 
-        logit1 = self.fc1(out1)
+        out1 = x
+        out1 = self.cbam1(out1)
+        out1 = self.block1_fgw(out1)
+        # Final convolution and pooling
+        out1 = self.last_conv(out1)
+        out1 = self.avgp(out1)
+        out1 = out1.view((out1.shape[0], -1))
 
         x = self.layer2(x)
-        out2 = self.block2_fgw(x)
-        out2 = self.avgpool(out2)
-        out2 = torch.flatten(out2, 1)
-        logit2 = self.fc2(out2)
+        out2 = x
+        out2 = self.cbam2(out2)
+        out2 = self.block2_fgw(out2)
+        # Final convolution and pooling
+        out2 = self.last_conv(out2)
+        out2 = self.avgp(out2)
+        out2 = out2.view((out2.shape[0], -1))
 
         x = self.layer3(x)
-        out3 = self.block3_fgw(x)
-        out3 = self.avgpool(out3)
-        out3 = torch.flatten(out3, 1)
-        logit3 = self.fc3(out3)
+        out3 = x
+        out3 = self.cbam3(out3)
+        out3 = self.block3_fgw(out3)
+        # Final convolution and pooling
+        out3 = self.last_conv(out3)
+        out3 = self.avgp(out3)
+        out3 = out3.view((out3.shape[0], -1))
 
         x = self.layer4(x)
-#512*h/4*w/4
-        # out4 = self.block4_fgw(x)
-        out4 = self.avgpool(x)# 512*1*1
-        out4 = torch.flatten(out4, 1)
-        logit4 = self.fc4(out4)
+        out4 = x
+        # Final convolution and pooling
+        out4 = self.last_conv(out4)
+        out4 = self.avgp(out4)
+        out4 = out4.view((out4.shape[0], -1))
 
-        return [out4, out3, out2, out1], [logit4, logit3, logit2, logit1]
+        return [out4, out3, out2, out1]
 
-def _resnet(arch, layers, pretrained, progress, **kwargs):
-    model = ResNet(layers, **kwargs)
+def _resnet(arch, block, layers, pretrained, progress, **kwargs):
+    model = ResNet(block, layers, **kwargs)
     if pretrained:
         state_dict = load_state_dict_from_url(model_urls[arch],
                                               progress=progress)
@@ -479,19 +500,67 @@ def resnet18(pretrained=False, progress=True, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _resnet('resnet18', [2, 2, 2, 2], pretrained, progress,
+    return _resnet('resnet18', BasicBlock, [2, 2, 2, 2], pretrained, progress,
                    **kwargs)
 
+def resnet50(pretrained=False, progress=True, **kwargs):
+    r"""ResNet-50 model from
+    `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
+    """
+    return _resnet('resnet50', Bottleneck, [3, 4, 6, 3], pretrained, progress,
+                   **kwargs)
+
+def count_conv2d_params(model):
+    # Count params of conv2d layer without bias
+    return sum(p.numel() for p in model.parameters() if p.ndim == 4 and not p.requires_grad)
+
+def count_bn_params(model):
+    # Count params of batchnorm layer
+    return 
+
 if __name__ == '__main__':
-    x = torch.rand(1,3,32, 32)
-    net = resnet18()
-    # net = Block(64, 128, keep_dim=False)
-    # net = nn.Sequential(Block(64, 128), Block(128, 256, keep_dim=False), Block(256, 512, keep_dim=False))
-    out = net(x)
-    print(out[1][0].shape)
-    # # import torch
-    # from torchvision.models import resnet18
-    # model = resnet18(pretrained=False)
-    # input_tensor = torch.randn(1, 256,8, 8)  # Assuming input size is 224x224
-    # output = model.layer4(input_tensor)
-    # print(output.shape)
+    model = resnet50(pretrained=False)
+
+    
+    conv1_params = sum(p.numel() for p in model.conv1.parameters())
+    bn1_params = sum(p.numel() for p in model.bn1.parameters())
+    layer1_params = sum(p.numel() for p in model.layer1.parameters())
+    cbam1_params = sum(p.numel() for p in model.cbam1.parameters())
+    block1_params = sum(p.numel() for p in model.block1_fgw.parameters())
+    last_conv_params = sum(p.numel() for p in model.last_conv.parameters())
+    avgp_params = sum(p.numel() for p in model.avgp.parameters())
+    branch1_params = conv1_params+bn1_params+layer1_params+cbam1_params+block1_params+avgp_params+last_conv_params
+    
+
+    layer2_params = sum(p.numel() for p in model.layer2.parameters())
+    cbam2_params = sum(p.numel() for p in model.cbam2.parameters())
+    block2_params = sum(p.numel() for p in model.block2_fgw.parameters())
+    branch2_params = layer2_params+cbam2_params+block2_params+conv1_params+bn1_params+layer1_params+avgp_params+last_conv_params
+
+
+    layer3_params = sum(p.numel() for p in model.layer3.parameters())
+    cbam3_params = sum(p.numel() for p in model.cbam3.parameters())
+    block3_params = sum(p.numel() for p in model.block3_fgw.parameters())
+    branch3_params = layer3_params+cbam3_params+block3_params+conv1_params+bn1_params+layer1_params+layer2_params+avgp_params+last_conv_params
+
+    layer4_params = sum(p.numel() for p in model.layer4.parameters())
+    branch4_params = layer4_params+conv1_params+bn1_params+layer1_params+layer2_params+layer3_params+avgp_params+last_conv_params
+
+    import torchvision
+    resnet50_vi = torchvision.models.resnet50(pretrained=False)
+
+    print('resnet50_torchvision params : M', sum(p.numel() for p in resnet50_vi.parameters())/1e6)
+
+    print('model params : M', sum(p.numel() for p in model.parameters())/1e6)
+    print(f'branch1_params:{branch1_params/1e6}M,\n\
+          branch2_params:{branch2_params/1e6}M,\n\
+          branch3_params:{branch3_params/1e6}M,\n\
+          resnet50_params:{branch4_params/1e6}M')
+    # for name,params in model.parameters():
+    #     if name.startswith('layer1'):
+    #         branch1_params.append(params)
+    # print(sum(p.numel() for p in branch1_params))

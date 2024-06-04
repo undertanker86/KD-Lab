@@ -9,7 +9,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-from src.resnet_2021 import resnet18_cbam
+from model.resnet_2021 import resnet18_cbam
 from torchmetrics import Accuracy
 from torchvision import datasets, transforms
 from torchvision.transforms import v2 as v2_transforms

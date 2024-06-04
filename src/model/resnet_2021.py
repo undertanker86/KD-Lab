@@ -288,7 +288,7 @@ class CifarResNet2021(nn.Module):
             
             
         
-            return logit,[f1,f2,f3,out4]
+            return [logit],[f1,f2,f3,out4]
         
         return logit
     
@@ -303,14 +303,13 @@ class ResnetAuxiliary(nn.Module):
 
     def forward(self, x):
         logit, feature = self.backbone(x)
-        aux_logit,aux_feature = self.aux_classifier(feature[:-1])
-        aux_feature.append(feature[-1])
+        aux_logit = self.aux_classifier(feature[:-1])
         aux_logit.append(logit)
         if self.ensemble:
-            ensemble_feature = torch.stack(aux_feature).mean(dim=0)
-            ensemble_logit = self.final_classifier(aux_feature)
+            ensemble_feature = torch.stack(feature).mean(dim=0)
+            ensemble_logit = self.final_classifier(feature)
             return ensemble_logit, ensemble_feature 
-        return aux_logit, aux_feature
+        return aux_logit, feature
 
 
 def resnet18(pretrained: bool = False, **kwargs: Any) -> CifarResNet2021:
@@ -330,7 +329,7 @@ def resnet18_cbam(pretrained: bool = False, **kwargs: Any) -> CifarResNet2021:
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResnetAuxiliary(BasicBlock, [2, 2, 2, 2], CBAM, [1, 1, 1, 1], DepthwiseSeparableConv2d, **kwargs)
+    model = ResnetAuxiliary(BasicBlock, [2, 2, 2, 2], CBAM, [1, 1, 1, 1], BasicBlock, **kwargs)
     return model
 
 
@@ -338,7 +337,8 @@ def resnet18_cbam(pretrained: bool = False, **kwargs: Any) -> CifarResNet2021:
 if __name__ == '__main__':
     x = torch.randn(1, 3, 32, 32)
     model = resnet18_cbam(pretrained=False)
-    print(model)
+    o,f = model(x)
+    print(len(o),len(x))
     # import torchviz
     # torchviz.make_dot(y[0].mean(), params=dict(list(model.named_parameters()))).render("resnet18_cbam", format="png")
     # for i, j in enumerate(y):
