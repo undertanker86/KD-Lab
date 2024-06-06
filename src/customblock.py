@@ -7,57 +7,24 @@ from typing import Type, Any, Callable, Union, List, Optional
 # Origin mobilenetv1 as v2 foward use inverted residual block
 # Make change for this to work with expansion
 class DepthwiseSeparableConv2d(nn.Module):
-    expansion = 1
-    def __init__(
-        self,
-        inplanes: int,
-        planes: int,
-        stride: int = 1,
-        downsample: Optional[nn.Module] = None,
-        groups: int = 1,
-        base_width: int = 64,
-        dilation: int = 1,
-        norm_layer: Optional[Callable[..., nn.Module]] = None,
-    ):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1):
         super().__init__()
+        self.dwconv = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, kernel_size, stride,
+                      padding=1, groups=in_channels, bias=False),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(inplace=True)
+        )
+        self.pwconv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
     
-        if norm_layer is None:
-            norm_layer = nn.BatchNorm2d
-        hidden_channels = int(planes)
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(
-                inplanes,
-                inplanes,
-                kernel_size=3,
-                stride=stride,
-                padding=1,
-                groups=groups,
-                bias=False,
-            ),
-            norm_layer(hidden_channels*self.expansion),
-            nn.ReLU(inplace=True),
-        )
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(
-                inplanes,
-                planes,
-                kernel_size=1,
-                bias=False,
-            ),
-            norm_layer(planes),
-        )
-        self.downsample = downsample
-        self.stride = stride
-
     def forward(self, x):
-        identity = x
-        out = self.conv1(x)
-        out = self.conv2(out)
-        if self.downsample is not None:
-            identity = self.downsample(x)
-        out += identity
-        out = F.relu(out)
-        return out
+        x = self.dwconv(x)
+        x = self.pwconv(x)
+        return x
 
 
 def conv1x1(in_planes, out_planes, stride=1):
@@ -262,13 +229,19 @@ if __name__ == "__main__":
     # output_tensor = model(input_tensor)
     # print(output_tensor.shape)
 
-    # input_tensor = torch.rand(1,64,56,56)
-    # model = nn.Sequential(
-    #             DepthwiseSeparableConv2d(64, 128, kernel_size=3, stride=2),
-    #             DepthwiseSeparableConv2d(128, 256, kernel_size=3, stride=2),
-    #             DepthwiseSeparableConv2d(256, 512, kernel_size=3, stride=1),
-    #             )
-    # output_tensor = model(input_tensor)
-    # print(output_tensor.shape)
+    input_tensor = torch.rand(1,64,32,32)
+    model = nn.Sequential(
+                DepthwiseSeparableConv2d(64, 128, kernel_size=3, stride=2),
+                DepthwiseSeparableConv2d(128, 256, kernel_size=3, stride=2),
+                DepthwiseSeparableConv2d(256, 512, kernel_size=3, stride=1),
+                )
+    output_tensor = model(input_tensor)
+    print(output_tensor.shape)
+    fc = nn.Sequential(
+        nn.AdaptiveAvgPool2d((1,1)),
+        nn.Linear(512, 10),
+    )
+    output_tensor = fc(output_tensor)
+    print(output_tensor.shape)
 
-    print(CBAM == CBAM)
+    # print(CBAM == CBAM)

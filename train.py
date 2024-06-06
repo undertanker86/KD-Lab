@@ -9,15 +9,16 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-from model.resnet_2021 import resnet18_cbam
-from torchmetrics import Accuracy
+from model.resnet_2021 import TripleAuxResNet
+# from torchmetrics import Accuracy
+from torchmetrics.functional import accuracy
 from torchvision import datasets, transforms
 from torchvision.transforms import v2 as v2_transforms
 
 from src.method import BYOT, DistilKL, Similarity
 
 
-class CIFARDataModule(pl.LightningDataModule):
+class CIFAR100DataModule(pl.LightningDataModule):
     def __init__(self, data_dir, batch_size, num_workers, dataset_name):
         super().__init__()
         self.data_dir = data_dir
@@ -28,10 +29,7 @@ class CIFARDataModule(pl.LightningDataModule):
         self.val_dataset = None
         self.test_dataset = None
 
-    def prepare_data(self):
-        # Download the dataset
-        datasets.CIFAR10(self.data_dir, train=True, download=True)
-        datasets.CIFAR100(self.data_dir, train=True, download=True)
+
 
     def setup(self, stage=None):
         transform = transforms.Compose([
@@ -40,12 +38,10 @@ class CIFARDataModule(pl.LightningDataModule):
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
         
 
-        if self.dataset_name == 'cifar10':
-            self.train_dataset = datasets.CIFAR10(self.data_dir, train=True, transform=transform, download=True)
-            self.val_dataset = datasets.CIFAR10(self.data_dir, train=False, transform=transform, download=True)
-        elif self.dataset_name == 'cifar100':
-            self.train_dataset = datasets.CIFAR100(self.data_dir, train=True, transform=transform, download=True)
-            self.val_dataset = datasets.CIFAR100(self.data_dir, train=False, transform=transform, download=True)
+
+
+        self.train_dataset = datasets.CIFAR100(self.data_dir, train=True, transform=transform, download=True)
+        self.val_dataset = datasets.CIFAR100(self.data_dir, train=False, transform=transform, download=True)
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=self.num_workers)
@@ -69,13 +65,13 @@ class CIFARModel(pl.LightningModule):
                  optimize_method:str,
                  scheduler_method:str,
                  final_loss_coeff_dict:dict,
-                 model = resnet18_cbam,
+                 model = 'resnet18',
                  seed:int=42,
                  ):
         super().__init__()
         self.save_hyperparameters()
         self.dataset_name = dataset_name
-        self.model = resnet18_cbam(pretrained=False)
+        self.model =  TripleAuxResNet(resnet_model=model, num_classes=100)
         self.seed = seed
         self.criterion = torch.nn.CrossEntropyLoss()
 
@@ -98,33 +94,38 @@ class CIFARModel(pl.LightningModule):
      
     
     def forward(self, x):
-        return self.model(x)
+        """One foward pass of self-distilation training"""
+        student1,student2,student3,teacher_logits = self.model(x)
+        softlabel = F.softmax(teacher_logits/self.temperature, dim=1)
+        return student1,student2,student3,softlabel,teacher_logits
    
     def training_step(self, batch, batch_idx):
         inputs, labels = batch
-        outputs, outputs_feature = self.forward(inputs)
-        total = 0.0
-        total += float(labels.size(0))
-        loss = torch.FloatTensor([0.]).to(self.device)
-        loss += self.criterion(outputs[0], labels)
-        teacher_output = outputs[0].detach()
-        teacher_feature = outputs_feature[0].detach()
-        correct = [0 for i in range(len(outputs))]
-        for index in range(1, len(outputs)):
-            loss += DistilKL(outputs_feature[index], teacher_feature, self.temperature)
-            loss += self.criterion(teacher_output, outputs[index]) * (1 - self.final_loss_coeff_dict[1])
+        student1,student2,student3, softlabel,teacher_logits = self.forward(inputs)
+        
+        student1_loss = F.kl_div(F.log_softmax(student1/self.temperature, dim=1), softlabel, reduction='mean')
+        student2_loss = F.kl_div(F.log_softmax(student2/self.temperature, dim=1), softlabel, reduction='mean')
+        student3_loss = F.kl_div(F.log_softmax(student3/self.temperature, dim=1), softlabel, reduction='mean')
 
-        loss /= len(outputs)
-        for classifier_index in range(len(outputs)):
-            _, outputs[classifier_index] = torch.max(outputs[classifier_index].data, 1)
-            correct[classifier_index] += float(outputs[classifier_index].eq(labels.data).cpu().sum())
+        teacher_loss = F.cross_entropy(teacher_logits, labels, reduction='mean')
+        student_loss = student1_loss + student2_loss + student3_loss
+        loss = self.alpha * student_loss + (1 - self.alpha) * teacher_loss
+        train_accuracy = accuracy(teacher_logits, labels,task="multiclass", num_classes=100)
+        layer1_accuracy = accuracy(student1, labels,task="multiclass", num_classes=100)
+        layer2_accuracy = accuracy(student2, labels,task="multiclass", num_classes=100)
+        layer3_accuracy = accuracy(student3, labels,task="multiclass", num_classes=100)
 
+        self.log("train_accuracy", train_accuracy)
+        self.log("layer1_accuracy", layer1_accuracy)
+        self.log("layer2_accuracy", layer2_accuracy)
+        self.log("layer3_accuracy", layer3_accuracy)
+        self.log("layer1_loss", student1_loss)
+        self.log("layer2_loss", student2_loss)
+        self.log("layer3_loss", student3_loss)
         self.log("train_loss", loss)
-        self.log("train_accuracy", 100 * correct[0] / total)
-        self.log("train_accuracy_1", 100 * correct[1] / total)
-        self.log("train_accuracy_2", 100 * correct[2] / total)
-        self.log("train_accuracy_3", 100 * correct[3] / total)
         return loss
+
+
     
     def configure_optimizers(self):
         if self.optimize_method == "adam":
@@ -157,18 +158,23 @@ class CIFARModel(pl.LightningModule):
     
     def validation_step(self, batch, batch_idx) -> torch.Tensor | os.Mapping[str, torch.Any] | None:
         inputs, labels = batch
-        outputs, outputs_feature = self.forward(inputs)
+        student1,student2,student3,softlabel,teacher_logits = self.forward(inputs)
 
-        total = 0.0
-        total += float(labels.size(0))
-        correct = [0 for i in range(len(outputs))]
-        for index in range(0, len(outputs)):
-            _, outputs[index] = torch.max(outputs[index].data, 1)
-            correct[index] += float(outputs[index].eq(labels.data).cpu().sum())
+        student1_accuracy = accuracy(student1, labels,task="multiclass", num_classes=100)
+        student2_accuracy = accuracy(student2, labels,task="multiclass", num_classes=100)
+        student3_accuracy = accuracy(student3, labels,task="multiclass", num_classes=100)
 
-        for classifier_index in range(len(outputs)):
-            self.log("val_accuracy_{}".format(classifier_index), 100 * correct[classifier_index] / total)
+        teacher_accuracy = accuracy(teacher_logits, labels,task="multiclass", num_classes=100)
 
+        self.log("val_layer1_accuracy", student1_accuracy)
+        self.log("val_layer2_accuracy", student2_accuracy)
+        self.log("val_layer3_accuracy", student3_accuracy)
+
+        self.log("val_teacher_accuracy", teacher_accuracy)
+        return teacher_accuracy
+
+        
+        
         
 
 
@@ -178,7 +184,7 @@ class CIFARModel(pl.LightningModule):
 
 def train(
     data_dir: str = "data",
-    batch_size: int = 512,
+    batch_size: int = 256,
     num_workers: int = 2,
     num_gpu_used: int = 1,
     max_epoch: int = 100,
@@ -193,7 +199,7 @@ def train(
     accelerator: str = "gpu",
     debug: bool = False
 ):
-    datamodule = CIFARDataModule(data_dir, batch_size, num_workers, dataset_name)
+    datamodule = CIFAR100DataModule(data_dir, batch_size, num_workers, dataset_name)
     datamodule.setup()
     model = CIFARModel(num_gpu_used, max_epoch, learning_rate, num_lr_warm_up_epoch, temperature, dataset_name, optimize_method, scheduler_method, final_loss_coeff_dict)
     pl.seed_everything(42)

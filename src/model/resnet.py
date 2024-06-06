@@ -279,7 +279,7 @@ class ResNet_Auxiliary(nn.Module):
         logits, features = self.backbone(x)
         aux_logits, aux_feats = self.auxiliary_classifier(features[:-1])
         aux_feats.append(features[-1])
-        bs = features[0].size(0)
+        
 
         aux_logits.append(logits)
 
