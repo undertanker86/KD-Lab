@@ -106,9 +106,9 @@ class CIFARModel(pl.LightningModule):
         student1_kl_loss = F.kl_div(F.log_softmax(student1/self.temperature, dim=1), softlabel, reduction='mean')
         student2_kl_loss = F.kl_div(F.log_softmax(student2/self.temperature, dim=1), softlabel, reduction='mean')
         student3_kl_loss = F.kl_div(F.log_softmax(student3/self.temperature, dim=1), softlabel, reduction='mean')
-        student1_ce_loss = F.cross_entropy(student1, labels, reduction='batchmean')
-        student2_ce_loss = F.cross_entropy(student2, labels, reduction='batchmean')
-        student3_ce_loss = F.cross_entropy(student3, labels, reduction='batchmean')
+        student1_ce_loss = F.cross_entropy(student1, labels, reduction='mean')
+        student2_ce_loss = F.cross_entropy(student2, labels, reduction='mean')
+        student3_ce_loss = F.cross_entropy(student3, labels, reduction='mean')
         student1_loss = student1_kl_loss + student1_ce_loss
         student2_loss = student2_kl_loss + student2_ce_loss
         student3_loss = student3_kl_loss + student3_ce_loss
@@ -237,6 +237,7 @@ def train(
         callbacks=[model_check_point,lr_monitor],
         log_every_n_steps=2,
         max_epochs = 2 if debug else max_epoch,
+        strategy='ddp_find_unused_parameters_true',
     )
     trainer.fit(model, datamodule=datamodule)
 
