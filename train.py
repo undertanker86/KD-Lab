@@ -128,6 +128,7 @@ class CIFARModel(pl.LightningModule):
         self.log("layer2_loss", student2_loss)
         self.log("layer3_loss", student3_loss)
         self.log("train_loss", loss)
+        
         return loss
 
 
@@ -204,7 +205,7 @@ def train(
     temperature: float = 3.0,
     dataset_name: str = "cifar100",
     optimize_method: str = "sgd",
-    scheduler_method: str = "cosine_anneal",
+    scheduler_method: str = "StepLR",
     alpha: float = 0.5,
     model = 'resnet18',
     checkpoint_dir: str = "checkpoints",
