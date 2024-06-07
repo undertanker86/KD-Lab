@@ -224,7 +224,7 @@ class ONE_ResNet(nn.Module):
         return nn.Sequential(*layers)
 
 
-        return x
+        
     def forward(self, x):
 
         # all branches share lower level layers

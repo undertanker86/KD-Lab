@@ -204,7 +204,7 @@ def train(
     temperature: float = 3.0,
     dataset_name: str = "cifar100",
     optimize_method: str = "SGD",
-    scheduler_method: str = "OneCycleLR",
+    scheduler_method: str = "cosine_anneal",
     alpha: float = 0.5,
     model = 'resnet18',
     checkpoint_dir: str = "checkpoints",
