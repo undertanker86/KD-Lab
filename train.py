@@ -181,11 +181,11 @@ class CIFARModel(pl.LightningModule):
 
         teacher_accuracy = accuracy(teacher_logits, labels,task="multiclass", num_classes=100)
 
-        self.log("val_layer1_accuracy", student1_accuracy)
-        self.log("val_layer2_accuracy", student2_accuracy)
-        self.log("val_layer3_accuracy", student3_accuracy)
+        self.log("val_layer1_accuracy", student1_accuracy,sync_dist=True)
+        self.log("val_layer2_accuracy", student2_accuracy,sync_dist=True)
+        self.log("val_layer3_accuracy", student3_accuracy,sync_dist=True)
 
-        self.log("val_teacher_accuracy", teacher_accuracy)
+        self.log("val_teacher_accuracy", teacher_accuracy,sync_dist=True)
         return teacher_accuracy
 
         
@@ -228,16 +228,16 @@ def train(
         filename = f"resnet18_separable_{dataset_name}",
         monitor = "val_teacher_accuracy",
     )
-    lr_monitor = LearningRateMonitor(logging_interval='epoch')
+    # lr_monitor = LearningRateMonitor(logging_interval='epoch')
     logger = WandbLogger(project="BYOT")
     trainer = pl.Trainer(
         accelerator=accelerator, 
         devices=num_gpu_used, 
         logger=logger, 
-        callbacks=[model_check_point,lr_monitor],
+        callbacks=[model_check_point],
         log_every_n_steps=2,
         max_epochs = 2 if debug else max_epoch,
-        strategy='ddp_find_unused_parameters_true',
+        # strategy='ddp_find_unused_parameters_true',
     )
     trainer.fit(model, datamodule=datamodule)
 
