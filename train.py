@@ -184,7 +184,7 @@ def train(
     data_dir: str = "data",
     batch_size: int = 256,
     num_workers: int = 2,
-    num_gpu_used: int = 1,
+    num_gpu_used: int = 2,
     max_epoch: int = 100,
     learning_rate: float = 0.01,
     num_lr_warm_up_epoch: int = 10,
@@ -225,4 +225,4 @@ def train(
     
     
 if __name__ == '__main__':
-    train(debug=True)
+    train(debug=False)
