@@ -21,7 +21,9 @@ class TripleAuxResNet(nn.Module):
         self.pretrained_model.conv1 = nn.Conv2d(
             3, 64, kernel_size=3, stride=1, padding=1, bias=False
         )
+        # Remove unneccessary layers
         self.pretrained_model.maxpool = nn.Identity()
+        self.pretrained_model.fc = nn.Identity()
         # Modify layer1 to create an auxiliary branch
         self.layer1_aux = nn.Sequential(
             self.pretrained_model._modules['layer1'][0],
