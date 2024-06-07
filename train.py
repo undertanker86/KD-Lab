@@ -101,10 +101,15 @@ class CIFARModel(pl.LightningModule):
         inputs, labels = batch
         student1,student2,student3, softlabel,teacher_logits = self.forward(inputs)
         
-        student1_loss = F.kl_div(F.log_softmax(student1/self.temperature, dim=1), softlabel, reduction='mean')
-        student2_loss = F.kl_div(F.log_softmax(student2/self.temperature, dim=1), softlabel, reduction='mean')
-        student3_loss = F.kl_div(F.log_softmax(student3/self.temperature, dim=1), softlabel, reduction='mean')
-
+        student1_kl_loss = F.kl_div(F.log_softmax(student1/self.temperature, dim=1), softlabel, reduction='mean')
+        student2_kl_loss = F.kl_div(F.log_softmax(student2/self.temperature, dim=1), softlabel, reduction='mean')
+        student3_kl_loss = F.kl_div(F.log_softmax(student3/self.temperature, dim=1), softlabel, reduction='mean')
+        student1_ce_loss = F.cross_entropy(student1, labels, reduction='mean')
+        student2_ce_loss = F.cross_entropy(student2, labels, reduction='mean')
+        student3_ce_loss = F.cross_entropy(student3, labels, reduction='mean')
+        student1_loss = student1_kl_loss + student1_ce_loss
+        student2_loss = student2_kl_loss + student2_ce_loss
+        student3_loss = student3_kl_loss + student3_ce_loss
         teacher_loss = F.cross_entropy(teacher_logits, labels, reduction='mean')
         student_loss = student1_loss + student2_loss + student3_loss
         loss = self.alpha * student_loss + (1 - self.alpha) * teacher_loss
@@ -129,7 +134,7 @@ class CIFARModel(pl.LightningModule):
         if self.optimize_method == "adam":
             optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         elif self.optimize_method == "sgd":
-            optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
+            optimizer = torch.optim.SGD(self.parameters(), lr=self.lr, momentum=0.9 , weight_decay=5e-4)
         elif self.optimize_method == "adam_wav2vec2.0":
             optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, betas=(0.9, 0.98), eps=1e-6) # wav2vec2,0's optimizer set up on Adam. (Need to verify)
         elif self.optimize_method == "adam":
@@ -149,6 +154,8 @@ class CIFARModel(pl.LightningModule):
             scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
         elif self.scheduler_method == "cosine_anneal":
             scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=9, T_mult=1, eta_min=1e-6)
+        elif self.scheduler_method == "OneCycleLR":
+            scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=len(self.train_dataloader()), epochs=self.max_epoch)
         else:
             raise NotImplementedError
 
@@ -190,8 +197,8 @@ def train(
     num_lr_warm_up_epoch: int = 10,
     temperature: float = 3.0,
     dataset_name: str = "cifar100",
-    optimize_method: str = "adam",
-    scheduler_method: str = "cosine_anneal",
+    optimize_method: str = "SGD",
+    scheduler_method: str = "OneCycleLR",
     alpha: float = 0.5,
     model = 'resnet18',
     checkpoint_dir: str = "checkpoints",

@@ -20,33 +20,62 @@ class ResNet50WithFeatures(nn.Module):
         return out1, out2, out3
 
 class ChannelAttention(nn.Module):
-    def __init__(self, in_channels, reduction=16):
+    def __init__(self, channel, reduction=16):
         super(ChannelAttention, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.max_pool = nn.AdaptiveMaxPool2d(1)
-
+        # replacing Flatten and Linear with 2 Conv2d  for MLP can have same result with lower parameter
         self.fc = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels // reduction, 1, bias=False),
-            nn.ReLU(),
-            nn.Conv2d(in_channels, in_channels, 1, bias=False)
+            nn.Conv2d(channel, channel // reduction, 1, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channel // reduction, channel, 1, bias=False),
         )
-
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         avg_out = self.fc(self.avg_pool(x))
         max_out = self.fc(self.max_pool(x))
         out = avg_out + max_out
-        return self.sigmoid(out)
+        return x * self.sigmoid(out)
+
+
+class SpatialAttention(nn.Module):
+    def __init__(self, kernel_size=7):
+        super(SpatialAttention, self).__init__()
+        self.conv = nn.Conv2d(2, 1, kernel_size, padding=kernel_size // 2, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+        out = torch.concat([avg_out, max_out], dim=1)
+        out = self.conv(out)
+        return x * self.sigmoid(out)
+
+
+class CBAM(nn.Module):
+    """CBAM: Convolutional Block Attention Module
+
+    As described in https://arxiv.org/pdf/1807.06521"""
+
+    def __init__(self, channel, reduction=16, kernel_size=7):
+        super().__init__()
+        self.ca = ChannelAttention(channel, reduction)
+        self.sa = SpatialAttention(kernel_size)
+
+    def forward(self, x):
+        x = self.ca(x)
+        x = self.sa(x)
+        return x
 
 class FeatureFusionWithAttention(nn.Module):
-    def __init__(self):
+    def __init__(self, pretrained=True):
         super(FeatureFusionWithAttention, self).__init__()
-        self.resnet50 = ResNet50WithFeatures(pretrained=True)
+        self.resnet50 = ResNet50WithFeatures(pretrained=pretrained)
         
-        self.attention1 = ChannelAttention(in_channels=256)  # For layer1 output
-        self.attention2 = ChannelAttention(in_channels=512)  # For layer2 output
-        self.attention3 = ChannelAttention(in_channels=1024) # For layer3 output
+        self.attention1 = CBAM(256)  # For layer1 output
+        self.attention2 = CBAM(512)  # For layer2 output
+        self.attention3 = CBAM(1024) # For layer3 output
 
         self.conv1 = nn.Conv2d(256, 1024, kernel_size=1) # Align channels
         self.conv2 = nn.Conv2d(512, 1024, kernel_size=1)
@@ -56,7 +85,7 @@ class FeatureFusionWithAttention(nn.Module):
 
     def forward(self, x):
         out1, out2, out3 = self.resnet50(x)
-        
+        print(out1.shape, out2.shape, out3.shape)
         att1 = self.attention1(out1) * out1
         att2 = self.attention2(out2) * out2
         att3 = self.attention3(out3) * out3
@@ -66,6 +95,7 @@ class FeatureFusionWithAttention(nn.Module):
 
         # Flatten the spatial dimensions for self-attention
         batch_size = att1.size(0)
+        spatial_dim = att1.size(2) * att1.size(3)
         att1 = att1.view(batch_size, 1024, -1).permute(2, 0, 1)
         att2 = att2.view(batch_size, 1024, -1).permute(2, 0, 1)
         att3 = att3.view(batch_size, 1024, -1).permute(2, 0, 1)
@@ -77,6 +107,9 @@ class FeatureFusionWithAttention(nn.Module):
         att_output, _ = self.self_attention(fused, fused, fused)
         
         # Reshape back to the original dimension
+        print(att_output.shape)
+        att_output = att_output.permute(1, 2, 0).contiguous()
+        att_output = att_output.view(batch_size, 1024, int(spatial_dim**0.5), int(spatial_dim**0.5))
         att_output = att_output.permute(1, 2, 0).view(batch_size, 1024, *out3.shape[2:])
         
         # Global average pooling
@@ -84,3 +117,14 @@ class FeatureFusionWithAttention(nn.Module):
         out = self.fc(fused)
         
         return out
+
+if __name__ == '__main__':
+    x = torch.randn(3, 3, 224, 224)
+    model = FeatureFusionWithAttention(pretrained=False)
+    y = model(x)
+    print(y.shape)
+
+    # x = torch.randn(2, 256, 32, 32)
+    # model = CBAM(256)
+    # y = model(x)
+    # print(y.shape)
