@@ -228,16 +228,17 @@ def train(
         filename = f"resnet18_separable_{dataset_name}",
         monitor = "val_teacher_accuracy",
     )
-    # lr_monitor = LearningRateMonitor(logging_interval='epoch')
+    lr_monitor = LearningRateMonitor(logging_interval='epoch')
     logger = WandbLogger(project="BYOT")
     trainer = pl.Trainer(
         accelerator=accelerator, 
         devices=num_gpu_used, 
         logger=logger, 
-        callbacks=[model_check_point],
+        callbacks=[model_check_point, lr_monitor],
         log_every_n_steps=2,
         max_epochs = 2 if debug else max_epoch,
-        # strategy='ddp_find_unused_parameters_true',
+        strategy='ddp_find_unused_parameters_true',
+    
     )
     trainer.fit(model, datamodule=datamodule)
 
