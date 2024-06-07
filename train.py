@@ -210,7 +210,7 @@ def train(
     model_check_point = ModelCheckpoint(
         checkpoint_dir,
         filename = f"resnet18_separable_{dataset_name}",
-        monitor = "val_acc",
+        monitor = "val_teacher_accuracy",
     )
     logger = WandbLogger(project="BYOT")
     trainer = pl.Trainer(
