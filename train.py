@@ -106,9 +106,9 @@ class CIFARModel(pl.LightningModule):
         student1_kl_loss = F.kl_div(F.log_softmax(student1/self.temperature, dim=1), softlabel, reduction='mean')
         student2_kl_loss = F.kl_div(F.log_softmax(student2/self.temperature, dim=1), softlabel, reduction='mean')
         student3_kl_loss = F.kl_div(F.log_softmax(student3/self.temperature, dim=1), softlabel, reduction='mean')
-        student1_ce_loss = F.cross_entropy(student1, labels, reduction='mean')
-        student2_ce_loss = F.cross_entropy(student2, labels, reduction='mean')
-        student3_ce_loss = F.cross_entropy(student3, labels, reduction='mean')
+        student1_ce_loss = F.cross_entropy(student1, labels, reduction='batchmean')
+        student2_ce_loss = F.cross_entropy(student2, labels, reduction='batchmean')
+        student3_ce_loss = F.cross_entropy(student3, labels, reduction='batchmean')
         student1_loss = student1_kl_loss + student1_ce_loss
         student2_loss = student2_kl_loss + student2_ce_loss
         student3_loss = student3_kl_loss + student3_ce_loss
@@ -131,7 +131,10 @@ class CIFARModel(pl.LightningModule):
         
         return loss
 
-
+    def on_after_backward(self):
+        for name, param in self.named_parameters():
+            if param.grad is None:
+                print(name)
     
     def configure_optimizers(self):
         if self.optimize_method == "adam":
@@ -240,4 +243,4 @@ def train(
     
     
 if __name__ == '__main__':
-    train(debug=False)
+    train(debug=True)
