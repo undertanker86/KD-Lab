@@ -7,17 +7,17 @@ sys.path.append('src')
 from customblock import ChannelAttention, SpatialAttention, CBAM, DepthwiseSeparableConv2d
 
 class TripleAuxResNet(nn.Module):
-    def __init__(self, resnet_model='resnet18',num_classes=100):
+    def __init__(self, resnet_model='resnet18',num_classes=100, pretrained=True):
         super(TripleAuxResNet, self).__init__()
         if resnet_model == 'resnet18':
-            self.pretrained_model = models.resnet18(pretrained=True)
+            self.pretrained_model = models.resnet18(pretrained=pretrained)
             self.expansion = 1
         elif resnet_model == 'resnet50':
-            self.pretrained_model = models.resnet50(pretrained=True)
+            self.pretrained_model = models.resnet50(pretrained=pretrained)
             self.expansion = 4
         # Freeze the pre-trained layers
-        for param in self.pretrained_model.parameters():
-            param.requires_grad = False
+        # for param in self.pretrained_model.parameters():
+        #     param.requires_grad = False
         self.pretrained_model.conv1 = nn.Conv2d(
             3, 64, kernel_size=3, stride=1, padding=1, bias=False
         )

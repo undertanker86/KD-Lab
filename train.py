@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from src.model.resnet_2021 import TripleAuxResNet
 # from torchmetrics import Accuracy
@@ -15,7 +16,7 @@ from torchmetrics.functional import accuracy
 from torchvision import datasets, transforms
 from torchvision.transforms import v2 as v2_transforms
 
-from src.method import BYOT, DistilKL, Similarity
+from src.distil_loss import BYOT, DistilKL, Similarity
 
 
 class CIFAR100DataModule(pl.LightningDataModule):
@@ -66,11 +67,12 @@ class CIFARModel(pl.LightningModule):
                  scheduler_method:str,
                  alpha:float,
                  model = 'resnet18',
+                 pretrained:bool = True,
                  ):
         super().__init__()
         self.save_hyperparameters()
         self.dataset_name = dataset_name
-        self.model =  TripleAuxResNet(resnet_model=model, num_classes=100)
+        self.model =  TripleAuxResNet(resnet_model=model, num_classes=100, pretrained=pretrained)
         self.criterion = torch.nn.CrossEntropyLoss()
 
 
@@ -155,7 +157,11 @@ class CIFARModel(pl.LightningModule):
         elif self.scheduler_method == "cosine_anneal":
             scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=9, T_mult=1, eta_min=1e-6)
         elif self.scheduler_method == "OneCycleLR":
-            scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=len(self.train_dataloader()), epochs=self.max_epoch)
+            scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=len(self.train_dataloader())//256, epochs=self.max_epoch)
+        elif self.scheduler_method == "StepLR":
+            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.2)
+        elif self.scheduler_method == "MultiStepLR":
+            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 90, 120], gamma=0.2)
         else:
             raise NotImplementedError
 
@@ -218,12 +224,13 @@ def train(
         filename = f"resnet18_separable_{dataset_name}",
         monitor = "val_teacher_accuracy",
     )
+    lr_monitor = LearningRateMonitor(logging_interval='epoch')
     logger = WandbLogger(project="BYOT")
     trainer = pl.Trainer(
         accelerator=accelerator, 
         devices=num_gpu_used, 
         logger=logger, 
-        callbacks=[model_check_point],
+        callbacks=[model_check_point,lr_monitor],
         log_every_n_steps=2,
         max_epochs = 2 if debug else max_epoch,
     )

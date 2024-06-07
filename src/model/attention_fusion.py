@@ -119,12 +119,17 @@ class FeatureFusionWithAttention(nn.Module):
         return out
 
 if __name__ == '__main__':
-    x = torch.randn(3, 3, 224, 224)
-    model = FeatureFusionWithAttention(pretrained=False)
+    # x = torch.randn(3, 3, 224, 224)
+    # model = FeatureFusionWithAttention(pretrained=False)
+    # y = model(x)
+    # print(y.shape)
+
+    x = torch.randn(2, 256, 32, 32)
+    model = CBAM(256)
     y = model(x)
     print(y.shape)
 
-    # x = torch.randn(2, 256, 32, 32)
-    # model = CBAM(256)
-    # y = model(x)
+    # x = torch.randn(2, 1024, 14, 14)
+    # model = MultiheadAttention(embed_dim=1024, num_heads=8)
+    # y = model(x, x.T, x)
     # print(y.shape)
