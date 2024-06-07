@@ -229,19 +229,22 @@ if __name__ == "__main__":
     # output_tensor = model(input_tensor)
     # print(output_tensor.shape)
 
-    input_tensor = torch.rand(1,64,32,32)
+    # input_tensor = torch.rand(1,64,32,32)
     model = nn.Sequential(
-                DepthwiseSeparableConv2d(64, 128, kernel_size=3, stride=2),
-                DepthwiseSeparableConv2d(128, 256, kernel_size=3, stride=2),
-                DepthwiseSeparableConv2d(256, 512, kernel_size=3, stride=1),
+                DepthwiseSeparableConv2d(64*4, 128*4, kernel_size=1, stride=2),
+                DepthwiseSeparableConv2d(128*4, 256*4, kernel_size=1, stride=2),
+                DepthwiseSeparableConv2d(256*4, 512*4, kernel_size=1, stride=1),
                 )
-    output_tensor = model(input_tensor)
-    print(output_tensor.shape)
-    fc = nn.Sequential(
-        nn.AdaptiveAvgPool2d((1,1)),
-        nn.Linear(512, 10),
-    )
-    output_tensor = fc(output_tensor)
-    print(output_tensor.shape)
+    # output_tensor = model(input_tensor)
+    # print(output_tensor.shape)
+    # fc = nn.Sequential(
+    #     nn.AdaptiveAvgPool2d((1,1)),
+    #     nn.Linear(512, 10),
+    # )
+    # output_tensor = fc(output_tensor)
+    # print(output_tensor.shape)
 
     # print(CBAM == CBAM)
+    from utils import cal_param_size, cal_multi_adds
+    # model = CBAM(128)
+    print(cal_param_size(model))

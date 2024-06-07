@@ -203,7 +203,7 @@ def train(
     num_lr_warm_up_epoch: int = 10,
     temperature: float = 3.0,
     dataset_name: str = "cifar100",
-    optimize_method: str = "SGD",
+    optimize_method: str = "sgd",
     scheduler_method: str = "cosine_anneal",
     alpha: float = 0.5,
     model = 'resnet18',
