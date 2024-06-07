@@ -64,9 +64,8 @@ class CIFARModel(pl.LightningModule):
                  dataset_name:str,
                  optimize_method:str,
                  scheduler_method:str,
-                 final_loss_coeff_dict:dict,
+                 alpha:float,
                  model = 'resnet18',
-                 seed:int=42,
                  ):
         super().__init__()
         self.save_hyperparameters()
@@ -78,7 +77,7 @@ class CIFARModel(pl.LightningModule):
 
         self.optimize_method = optimize_method
         self.scheduler_method = scheduler_method
-        self.final_loss_coeff_dict = final_loss_coeff_dict
+        self.alpha = alpha
         if num_gpu_used == 1:
             self.max_epoch = max_epoch
             self.lr = learning_rate
@@ -194,18 +193,23 @@ def train(
     dataset_name: str = "cifar100",
     optimize_method: str = "adam",
     scheduler_method: str = "cosine_anneal",
-    final_loss_coeff_dict: dict = {"kd": 0.5, "ce": 0.5},
+    alpha: float = 0.5,
+    model = 'resnet18',
     checkpoint_dir: str = "checkpoints",
     accelerator: str = "gpu",
     debug: bool = False
 ):
     datamodule = CIFAR100DataModule(data_dir, batch_size, num_workers, dataset_name)
     datamodule.setup()
-    model = CIFARModel(num_gpu_used, max_epoch, learning_rate, num_lr_warm_up_epoch, temperature, dataset_name, optimize_method, scheduler_method, final_loss_coeff_dict)
+    model = CIFARModel(num_gpu_used, max_epoch, 
+                       learning_rate, num_lr_warm_up_epoch, 
+                       temperature, dataset_name, 
+                       optimize_method, scheduler_method, 
+                       alpha, model)
     pl.seed_everything(42)
     model_check_point = ModelCheckpoint(
         checkpoint_dir,
-        filename = f"resnet18_cbam-{final_loss_coeff_dict}",
+        filename = f"resnet18_separable_{dataset_name}",
         monitor = "val_acc",
     )
     logger = WandbLogger(project="BYOT")

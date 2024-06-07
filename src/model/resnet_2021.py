@@ -71,7 +71,6 @@ class TripleAuxResNet(nn.Module):
         # Auxiliary branch for layer1
         aux1 = self.layer1_aux(out)
         aux1 = aux1.view(aux1.size(0), -1)
-        print(aux1.shape)
         out1 = self.classifier1_aux(aux1)
 
         # Main branch through layer1
