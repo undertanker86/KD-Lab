@@ -71,7 +71,6 @@ class CIFARModel(pl.LightningModule):
         self.save_hyperparameters()
         self.dataset_name = dataset_name
         self.model =  TripleAuxResNet(resnet_model=model, num_classes=100)
-        self.seed = seed
         self.criterion = torch.nn.CrossEntropyLoss()
 
 
