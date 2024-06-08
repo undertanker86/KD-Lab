@@ -158,7 +158,7 @@ class CIFARModel(pl.LightningModule):
                 return max(
                     0.0, float(self.max_epoch - current_epoch) / float(max(1, self.max_epoch - self.num_lr_warm_up_epoch)))
             scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
-        elif self.scheduler_method == "cosine_anneal":
+        elif self.scheduler_method == "cosine_warmup_anneal":
             scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=9, T_mult=1, eta_min=1e-6)
         elif self.scheduler_method == "OneCycleLR":
             scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=len(self.train_dataloader())//256, epochs=self.max_epoch)
@@ -166,6 +166,8 @@ class CIFARModel(pl.LightningModule):
             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.2)
         elif self.scheduler_method == "MultiStepLR":
             scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 90, 120], gamma=0.2)
+        elif self.scheduler_method == "cosine_annealingLR":
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=280, eta_min=1e-6)
         else:
             raise NotImplementedError
 
@@ -248,7 +250,6 @@ def train(
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--debug', action='store_true', help='debug mode')
     parser.add_argument('--data_dir', type=str, default='data', help='data directory')
     parser.add_argument('--batch_size', type=int, default=256, help='batch size')
     parser.add_argument('--num_workers', type=int, default=2, help='number of workers')
