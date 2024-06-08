@@ -265,5 +265,5 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='resnet18', help='model')
     parser.add_argument('--checkpoint_dir', type=str, default='checkpoints', help='checkpoint dir')
     parser.add_argument('--accelerator', type=str, default='gpu', help='accelerator')
-    parser.add_argument('--chkpt_path', type=str, default=None, help='checkpoint path')
+    parser.add_argument('--ckpt_path', type=str, default=None, help='checkpoint path')
     train(debug=False, **vars(parser.parse_args()))
