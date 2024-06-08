@@ -17,7 +17,7 @@ from torchvision import datasets, transforms
 from torchvision.transforms import v2 as v2_transforms
 
 from src.distil_loss import BYOT, DistilKL, Similarity
-
+import argparse
 
 class CIFAR100DataModule(pl.LightningDataModule):
     def __init__(self, data_dir, batch_size, num_workers, dataset_name):
@@ -213,7 +213,8 @@ def train(
     model = 'resnet18',
     checkpoint_dir: str = "checkpoints",
     accelerator: str = "gpu",
-    debug: bool = False
+    debug: bool = False,
+    ckpt_path:str = None
 ):
     datamodule = CIFAR100DataModule(data_dir, batch_size, num_workers, dataset_name)
     datamodule.setup()
@@ -238,11 +239,30 @@ def train(
         log_every_n_steps=2,
         max_epochs = 2 if debug else max_epoch,
         strategy='ddp_find_unused_parameters_true',
+
     
     )
-    trainer.fit(model, datamodule=datamodule)
+    trainer.fit(model, datamodule=datamodule, ckpt_path=ckpt_path)
 
     
     
 if __name__ == '__main__':
-    train(debug=False)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--debug', action='store_true', help='debug mode')
+    parser.add_argument('--data_dir', type=str, default='data', help='data directory')
+    parser.add_argument('--batch_size', type=int, default=256, help='batch size')
+    parser.add_argument('--num_workers', type=int, default=2, help='number of workers')
+    parser.add_argument('--num_gpu_used', type=int, default=2, help='number of gpu used')
+    parser.add_argument('--max_epoch', type=int, default=100, help='max epoch')
+    parser.add_argument('--learning_rate', type=float, default=0.01, help='learning rate')
+    parser.add_argument('--num_lr_warm_up_epoch', type=int, default=10, help='number of lr warm up epoch')
+    parser.add_argument('--temperature', type=float, default=3.0, help='temperature')
+    parser.add_argument('--dataset_name', type=str, default='cifar100', help='dataset name')
+    parser.add_argument('--optimize_method', type=str, default='sgd', help='optimize method')
+    parser.add_argument('--scheduler_method', type=str, default='StepLR', help='scheduler method')
+    parser.add_argument('--alpha', type=float, default=0.5, help='alpha')
+    parser.add_argument('--model', type=str, default='resnet18', help='model')
+    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints', help='checkpoint dir')
+    parser.add_argument('--accelerator', type=str, default='gpu', help='accelerator')
+    parser.add_argument('--chkpt_path', type=str, default=None, help='checkpoint path')
+    train(debug=False, **vars(parser.parse_args()))
