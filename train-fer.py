@@ -227,7 +227,8 @@ def train(
     accelerator: str = "gpu",
     debug: bool = False,
     ckpt_path:str = None
-)
+    ):
+
     
     datamodule = Ferdatamodule(batch_size, num_workers)
     datamodule.setup()
