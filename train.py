@@ -17,7 +17,7 @@ from torchvision import datasets, transforms
 from torchvision.transforms import v2 as v2_transforms
 
 from src.distil_loss import BYOT, DistilKL, Similarity
-import argparse
+
 
 class CIFAR100DataModule(pl.LightningDataModule):
     def __init__(self, data_dir, batch_size, num_workers, dataset_name):
@@ -53,6 +53,43 @@ class CIFAR100DataModule(pl.LightningDataModule):
     # def test_dataloader(self):
     #     return torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers)
     
+# https://discuss.pytorch.org/t/balanced-sampling-between-classes-with-torchvision-dataloader/2703/3
+def make_weights_for_balanced_classes(images, nclasses):                        
+    count = [0] * nclasses                                                      
+    for item in images:                                                         
+        count[item[1]] += 1                                                     
+    weight_per_class = [0.] * nclasses                                      
+    N = float(sum(count))                                                   
+    for i in range(nclasses):                                                   
+        weight_per_class[i] = N/float(count[i])                                 
+    weight = [0] * len(images)                                              
+    for idx, val in enumerate(images):                                          
+        weight[idx] = weight_per_class[val[1]]                                  
+    return weight 
+
+class Ferdatamodule(pl.LightningDataModule):
+    def __init__(self,train_folder='kaggle/input/fer2013/train', 
+                 test_folder='kaggle/input/fer2013/test',
+                 batch_size=64, num_workers=4) -> None:
+        super().__init__()
+        self.train_folder = train_folder
+        self.test_folder = test_folder
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+
+        self.sampler = torch.utils.data.WeightedRandomSampler
+
+    def setup(self, stage=None):
+        self.train_dataset = datasets.ImageFolder(self.train_folder)
+        self.test_dataset = datasets.ImageFolder(self.test_folder)
+        self.weights = make_weights_for_balanced_classes(self.train_dataset.imgs, len(self.train_dataset.classes))
+        self.weights = torch.DoubleTensor(self.weights)
+
+    def train_dataloader(self):
+        return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, sampler=self.sampler(self.weights))
+
+    def val_dataloader(self):
+        return torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size)
 
 class CIFARModel(pl.LightningModule):
     def __init__(self,
@@ -67,7 +104,7 @@ class CIFARModel(pl.LightningModule):
                  scheduler_method:str,
                  alpha:float,
                  model = 'resnet18',
-                 pretrained:bool = True,
+                 pretrained:bool = False,
                  ):
         super().__init__()
         self.save_hyperparameters()
@@ -115,15 +152,16 @@ class CIFARModel(pl.LightningModule):
         teacher_loss = F.cross_entropy(teacher_logits, labels, reduction='mean')
         student_loss = student1_loss + student2_loss + student3_loss
         loss = self.alpha * student_loss + (1 - self.alpha) * teacher_loss
-        train_accuracy = accuracy(teacher_logits, labels,task="multiclass", num_classes=100)
-        layer1_accuracy = accuracy(student1, labels,task="multiclass", num_classes=100)
-        layer2_accuracy = accuracy(student2, labels,task="multiclass", num_classes=100)
-        layer3_accuracy = accuracy(student3, labels,task="multiclass", num_classes=100)
+        train_accuracy = accuracy(teacher_logits, labels)
 
-        self.log("train_accuracy", train_accuracy)
-        self.log("layer1_accuracy", layer1_accuracy)
-        self.log("layer2_accuracy", layer2_accuracy)
-        self.log("layer3_accuracy", layer3_accuracy)
+        layer1_accuracy = accuracy(student1, labels)
+        layer2_accuracy = accuracy(student2, labels)
+        layer3_accuracy = accuracy(student3, labels)
+
+        self.log("train_accuracy", train_accuracy, sync_dist=True , on_epoch=True)
+        self.log("layer1_accuracy", layer1_accuracy, sync_dist=True, on_epoch=True)
+        self.log("layer2_accuracy", layer2_accuracy, sync_dist=True, on_epoch=True)
+        self.log("layer3_accuracy", layer3_accuracy, sync_dist=True, on_epoch=True)
         self.log("layer1_loss", student1_loss)
         self.log("layer2_loss", student2_loss)
         self.log("layer3_loss", student3_loss)
@@ -177,11 +215,10 @@ class CIFARModel(pl.LightningModule):
         inputs, labels = batch
         student1,student2,student3,softlabel,teacher_logits = self.forward(inputs)
 
-        student1_accuracy = accuracy(student1, labels,task="multiclass", num_classes=100)
-        student2_accuracy = accuracy(student2, labels,task="multiclass", num_classes=100)
-        student3_accuracy = accuracy(student3, labels,task="multiclass", num_classes=100)
-
-        teacher_accuracy = accuracy(teacher_logits, labels,task="multiclass", num_classes=100)
+        student1_accuracy = float((torch.max(student1, 1)[1].eq(labels)).cpu().sum()) / len(labels)
+        student2_accuracy = float((torch.max(student2, 1)[1].eq(labels)).cpu().sum()) / len(labels)
+        student3_accuracy = float((torch.max(student3, 1)[1].eq(labels)).cpu().sum()) / len(labels)
+        teacher_accuracy = float((torch.max(teacher_logits, 1)[1].eq(labels)).cpu().sum()) / len(labels)
 
         self.log("val_layer1_accuracy", student1_accuracy,sync_dist=True)
         self.log("val_layer2_accuracy", student2_accuracy,sync_dist=True)
@@ -189,7 +226,6 @@ class CIFARModel(pl.LightningModule):
 
         self.log("val_teacher_accuracy", teacher_accuracy,sync_dist=True)
         return teacher_accuracy
-
         
         
         
@@ -210,7 +246,7 @@ def train(
     temperature: float = 3.0,
     dataset_name: str = "cifar100",
     optimize_method: str = "sgd",
-    scheduler_method: str = "StepLR",
+    scheduler_method: str = "cosine_annealingLR",
     alpha: float = 0.5,
     model = 'resnet18',
     checkpoint_dir: str = "checkpoints",

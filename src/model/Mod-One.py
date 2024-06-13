@@ -124,7 +124,7 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 32, n, stride=2)
         self.layer3 = self._make_layer(block, 64, n, stride=2)
         self.avgpool = nn.AvgPool2d(8)
-        self.fc = nn.Linear(64 * block.expansion, num_classes)
+        self.fc = nn.Linear(64 , num_classes)
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -135,16 +135,16 @@ class ResNet(nn.Module):
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
-        if stride != 1 or self.inplanes != planes * block.expansion:
+        if stride != 1 or self.inplanes != planes :
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,
+                nn.Conv2d(self.inplanes, planes ,
                           kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(planes * block.expansion),
+                nn.BatchNorm2d(planes ),
             )
 
         layers = []
         layers.append(block(self.inplanes, planes, stride, downsample))
-        self.inplanes = planes * block.expansion
+        self.inplanes = planes 
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes))
 
@@ -195,9 +195,9 @@ class ONE_ResNet(nn.Module):
 
         self.avgpool_c = nn.AvgPool2d(16)
 
-        self.classfier3_1=nn.Linear(256 * block.expansion, num_classes)
-        self.classfier3_2=nn.Linear(256 * block.expansion,num_classes)
-        self.classfier3_3=nn.Linear(256 * block.expansion, num_classes)
+        self.classfier3_1=nn.Linear(256 , num_classes)
+        self.classfier3_2=nn.Linear(256 ,num_classes)
+        self.classfier3_3=nn.Linear(256 , num_classes)
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -208,16 +208,16 @@ class ONE_ResNet(nn.Module):
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
-        if stride != 1 or self.inplanes != planes * block.expansion:
+        if stride != 1 or self.inplanes != planes :
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,
+                nn.Conv2d(self.inplanes, planes ,
                           kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(planes * block.expansion),
+                nn.BatchNorm2d(planes ),
             )
 
         layers = []
         layers.append(block(self.inplanes, planes, stride, downsample))
-        self.inplanes = planes * block.expansion
+        self.inplanes = planes 
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes))
 
@@ -267,6 +267,112 @@ class ONE_ResNet(nn.Module):
         x_m=x_c_1*x_3_1+x_c_2*x_3_2+x_c_3*x_3_3
         return x_3_1,x_3_2,x_3_3,x_m
 
+
+class ResnetONEImageNet(nn.Module):
+    def __init__(self, block, layers, num_classes=1000):
+        self.inplanes = 64
+        super(ResnetONEImageNet, self).__init__()
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
+                               bias=False)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+        self.layer1 = self._make_layer(block, 64, layers[0])
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+        # self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+
+        fix_inplanes = self.inplanes
+        self.layer3_1 = self._make_layer(block, 256, layers[2], stride=2)
+        fix_inplanes = self.inplanes
+        self.layer3_2 = self._make_layer(block, 256, layers[2], stride=2)
+        fix_inplanes = self.inplanes
+        self.layer3_3 = self._make_layer(block, 256, layers[2], stride=2)
+
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.classifier = nn.Linear(256 , num_classes)
+
+        self.control_v1 = nn.Linear(fix_inplanes, 3)
+        self.bn_v1 = nn.BatchNorm1d(3)
+
+        # self.avgpool = nn.AvgPool2d(8)
+
+        self.avgpool_c = nn.AvgPool2d(64) #16 
+
+
+        self.classfier3_1=nn.Linear(256 , num_classes)
+        self.classfier3_2=nn.Linear(256 ,num_classes)
+        self.classfier3_3=nn.Linear(256 , num_classes)
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+    def _make_layer(self, block, planes, blocks, stride=1):
+        downsample = None
+        if stride != 1 or self.inplanes != planes :
+            downsample = nn.Sequential(
+                nn.Conv2d(self.inplanes, planes ,
+                          kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(planes ),
+            )
+
+        layers = []
+        layers.append(block(self.inplanes, planes, stride, downsample))
+        self.inplanes = planes 
+        for i in range(1, blocks):
+            layers.append(block(self.inplanes, planes))
+
+        return nn.Sequential(*layers)
+
+
+
+    def forward(self, x):
+
+        # all branches share lower level layers
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)    # 32x32
+
+        x = self.layer1(x)  # 32x32
+        x = self.layer2(x)  # 16x16
+
+        # x_c is used to give weight to each branch
+        print(x.shape)
+        x_c = self.avgpool_c(x)
+        print(x_c.shape)
+        x_c = x_c.view(x_c.size(0), -1)
+
+        x_c=self.control_v1(x_c)
+        x_c=self.bn_v1(x_c)
+        x_c=F.relu(x_c)
+        x_c = F.softmax(x_c,dim=1)
+
+        # high level layer is used to make branches
+        x_3_1 = self.layer3_1(x)
+        x_3_2 = self.layer3_2(x)
+        x_3_3 = self.layer3_3(x)
+
+
+        x_3_1 = self.avgpool(x_3_1)
+        x_3_1 = x_3_1.view(x_3_1.size(0), -1)
+        x_3_2 = self.avgpool(x_3_2)
+        x_3_2 = x_3_2.view(x_3_2.size(0), -1)
+        x_3_3 = self.avgpool(x_3_3)
+        x_3_3 = x_3_3.view(x_3_3.size(0), -1)
+
+        # Each branch output is weighted by x_c to make teacher ensemble logit
+        x_3_1 = self.classfier3_1(x_3_1)
+        x_3_2 = self.classfier3_2(x_3_2)
+        x_3_3 = self.classfier3_3(x_3_3)
+        x_c_1=x_c[:,0].repeat(x_3_1.size()[1], 1).transpose(0,1)
+        x_c_2=x_c[:,1].repeat(x_3_1.size()[1], 1).transpose(0,1)
+        x_c_3=x_c[:,2].repeat(x_3_1.size()[1], 1).transpose(0,1)
+        x_m=x_c_1*x_3_1+x_c_2*x_3_2+x_c_3*x_3_3
+        return x_3_1,x_3_2,x_3_3,x_m
 def resnet(**kwargs):
     """
     Constructs a ResNet model.
@@ -285,11 +391,18 @@ def one_resnet18(**kwargs):
     """
     return ONE_ResNet(14 ,**kwargs)
 
+def resnetone(**kwargs):
+    """
+    Constructs a ResNet model.
+    """
+    return ResnetONEImageNet(BasicBlock, [2, 2, 2, 2], **kwargs)
+
 if __name__ == '__main__':
-    x = torch.randn(2, 3, 32, 32)
-    model = one_resnet18()
+    x = torch.randn(1, 3, 224, 224)
+    model = resnetone()
     y = model(x)
-    import sys
-    sys.path.append('src')
-    from utils import cal_param_size, cal_multi_adds
-    print(cal_param_size(model))
+    print(y[0].shape)
+    # import sys
+    # sys.path.append('src')
+    # from utils import cal_param_size, cal_multi_adds
+    # print(cal_param_size(model))

@@ -180,3 +180,4 @@ wandb/*
 data/*
 wandb
 data
+test.py

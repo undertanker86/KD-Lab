@@ -58,22 +58,6 @@ class CAM(nn.Module):
         scale = torch.sigmoid(channel_att_sum).unsqueeze(2).unsqueeze(3).expand_as(x) # (b x c x h x w)
         return x * scale
 
-"""
-if __name__ == '__main__':
-    x = torch.rand(3, 4, 32, 32)
-    y = torch.rand(3, 4, 1, 1)
-    print(y)
-    print(y.expand_as(x))
-    # cam = ChannelGate(48)
-    # out = cam(x)
-    # print(out.shape)
-    # fl = Flatten()
-    # avg_pool = F.avg_pool2d(x, (x.size(2), x.size(3)),
-    #                         stride=(x.size(2), x.size(3)))
-    # print(avg_pool)
-    # out = fl(avg_pool)
-    # print(out)
-"""
 
 
 class CBAM(nn.Module):
@@ -128,8 +112,6 @@ class SAM(nn.Module):
         return scale * x
 
 
-import torch
-import torch.nn as nn
 
 def conv3x3(in_channels, out_channels, kernel_size=3, stride=1, padding=1):
     return nn.Sequential(
@@ -182,59 +164,6 @@ class Block(nn.Module):
         # out = self.relu(out)
         return out
 # class
-
-class Model(nn.Module):
-    def __init__(self, in_channels, num_classes):
-        super(Model, self).__init__()
-        self.relu = nn.ReLU(inplace=True)
-        # 1
-        self.conv1 = conv3x3(in_channels, 8)
-        self.conv2 = conv3x3(8, 8)
-        self.cbam = CBAM(8,8)
-
-        # 2
-        self.block1 = Block(8, 16, keep_dim=True)
-
-        # 3
-        self.block2 = Block(16, 32, keep_dim=True)
-
-        # 4
-        self.block3 = Block(32, 64, keep_dim=False)
-
-        # 5
-        self.block4 = Block(64, 128, keep_dim=False)
-
-        # last conv to down to num_classes
-        self.last_conv = conv3x3(128, num_classes)
-
-        # global avg-p
-        self.avgp = nn.AdaptiveAvgPool2d((1, 1))
-
-    def forward(self, x):
-        # Initial convolutions
-        out = self.conv1(x)
-        #print("After conv1", out.size())
-        out = self.conv2(out)
-        #print("After conv2", out.size())
-        out = self.cbam(out)
-        #print("After CBAM", out.size())
-
-        # Block processing
-        out = self.block1(out)
-        out = self.block2(out)
-        out = self.block3(out)
-        out = self.block4(out)
-
-        #print("After blocks", out.size())
-
-        # Final convolution and pooling
-        out = self.last_conv(out)
-        #print("After last_conv", out.size())
-        out = self.avgp(out)
-        #print("After avgp", out.size())
-        out = out.view((out.shape[0], -1))
-
-        return out
 
 
 
@@ -518,9 +447,7 @@ def count_conv2d_params(model):
     # Count params of conv2d layer without bias
     return sum(p.numel() for p in model.parameters() if p.ndim == 4 and not p.requires_grad)
 
-def count_bn_params(model):
-    # Count params of batchnorm layer
-    return 
+
 
 if __name__ == '__main__':
     model = resnet50(pretrained=False)

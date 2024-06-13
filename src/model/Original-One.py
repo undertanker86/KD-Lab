@@ -258,6 +258,7 @@ class ONE_ResNet(nn.Module):
         x_3_3 = x_3_3.view(x_3_3.size(0), -1)
 
         # Each branch output is weighted by x_c to make teacher ensemble logit
+        # computes the element-wise product of the reshaped output of the softmax layer and each of the three outputs from the previous step
         x_3_1 = self.classfier3_1(x_3_1)
         x_3_2 = self.classfier3_2(x_3_2)
         x_3_3 = self.classfier3_3(x_3_3)
