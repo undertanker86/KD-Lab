@@ -136,9 +136,9 @@ class CIFARModel(pl.LightningModule):
         loss = self.alpha * student_loss + (1 - self.alpha) * teacher_loss
         train_accuracy = accuracy(teacher_logits, labels)
 
-        layer1_accuracy = accuracy(student1, labels)
-        layer2_accuracy = accuracy(student2, labels)
-        layer3_accuracy = accuracy(student3, labels)
+        layer1_accuracy = accuracy(student1, labels, task="multiclass", num_classes=7)
+        layer2_accuracy = accuracy(student2, labels, task="multiclass", num_classes=7)
+        layer3_accuracy = accuracy(student3, labels, task="multiclass", num_classes=7)
 
         self.log("train_accuracy", train_accuracy, sync_dist=True , on_epoch=True)
         self.log("layer1_accuracy", layer1_accuracy, sync_dist=True, on_epoch=True)
@@ -264,7 +264,7 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true', help='debug mode')
     parser.add_argument('--train_folder', type=str, default='/kaggle/input/fer2013/train', help='data directory')
     parser.add_argument('--test_folder', type=str, default='/kaggle/input/fer2013/test', help='data directory')
-    parser.add_argument('--batch_size', type=int, default=256, help='batch size')
+    parser.add_argument('--batch_size', type=int, default=, help='batch size')
     parser.add_argument('--num_workers', type=int, default=2, help='number of workers')
     parser.add_argument('--num_gpu_used', type=int, default=2, help='number of gpu used')
     parser.add_argument('--max_epoch', type=int, default=100, help='max epoch')
