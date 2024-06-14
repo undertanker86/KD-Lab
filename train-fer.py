@@ -52,7 +52,7 @@ class Ferdatamodule(pl.LightningDataModule):
 
     def set_up_transforms(self):
         self.train_transforms = transforms.Compose([
-            transforms.Resize(224,224),
+            transforms.Resize(224),
             transforms.RandomHorizontalFlip(),
             transforms.RandomRotation(10),
             transforms.ToTensor(),
@@ -60,7 +60,7 @@ class Ferdatamodule(pl.LightningDataModule):
         ])
 
         self.test_transforms = transforms.Compose([
-            transforms.Resize(224,224),
+            transforms.Resize(224),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
