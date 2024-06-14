@@ -41,7 +41,7 @@ class Ferdatamodule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-        self.sampler = torch.utils.data.WeightedRandomSampler
+        self.sampler = torch.utils.data.sampler.WeightedRandomSampler
 
     def setup(self, stage=None):
         self.set_up_transforms()
@@ -66,7 +66,7 @@ class Ferdatamodule(pl.LightningDataModule):
         ])
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, sampler=self.sampler(self.weights), num_workers=self.num_workers)
+        return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, sampler=self.sampler(self.weights, len(self.train_dataset)), num_workers=self.num_workers)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers)
