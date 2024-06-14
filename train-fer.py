@@ -32,8 +32,8 @@ def make_weights_for_balanced_classes(images, nclasses):
     return weight 
 
 class Ferdatamodule(pl.LightningDataModule):
-    def __init__(self,train_folder='kaggle/input/fer2013/train', 
-                 test_folder='kaggle/input/fer2013/test',
+    def __init__(self,train_folder='/kaggle/input/fer2013/train', 
+                 test_folder='/kaggle/input/fer2013/test',
                  batch_size=64, num_workers=4) -> None:
         super().__init__()
         self.train_folder = train_folder
@@ -210,7 +210,8 @@ class CIFARModel(pl.LightningModule):
         return teacher_accuracy
         
 def train(
-    data_dir: str = "data",
+    train_folder: str = "/kaggle/input/fer2013/train",
+    test_folder: str = "/kaggle/input/fer2013/test",
     batch_size: int = 128,
     num_workers: int = 2,
     num_gpu_used: int = 2,
@@ -230,7 +231,7 @@ def train(
     ):
 
     
-    datamodule = Ferdatamodule(batch_size, num_workers)
+    datamodule = Ferdatamodule(train_folder, test_folder, batch_size, num_workers)
     datamodule.setup()
     model = CIFARModel(num_gpu_used, max_epoch, 
                        learning_rate, num_lr_warm_up_epoch, 
