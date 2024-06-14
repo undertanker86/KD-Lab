@@ -10,7 +10,7 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-# from src.model.resnet_2021 import TripleAuxResNet
+
 from src.model.resnet_fer import TripleAuxResNetFer
 # from torchmetrics import Accuracy
 from torchmetrics.functional import accuracy
