@@ -134,7 +134,7 @@ class CIFARModel(pl.LightningModule):
         teacher_loss = F.cross_entropy(teacher_logits, labels, reduction='mean')
         student_loss = student1_loss + student2_loss + student3_loss
         loss = self.alpha * student_loss + (1 - self.alpha) * teacher_loss
-        train_accuracy = accuracy(teacher_logits, labels)
+        train_accuracy = accuracy(teacher_logits, labels, task="multiclass", num_classes=7)
 
         layer1_accuracy = accuracy(student1, labels, task="multiclass", num_classes=7)
         layer2_accuracy = accuracy(student2, labels, task="multiclass", num_classes=7)
