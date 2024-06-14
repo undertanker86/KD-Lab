@@ -264,7 +264,7 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true', help='debug mode')
     parser.add_argument('--train_folder', type=str, default='/kaggle/input/fer2013/train', help='data directory')
     parser.add_argument('--test_folder', type=str, default='/kaggle/input/fer2013/test', help='data directory')
-    parser.add_argument('--batch_size', type=int, default=, help='batch size')
+    parser.add_argument('--batch_size', type=int, default=128, help='batch size')
     parser.add_argument('--num_workers', type=int, default=2, help='number of workers')
     parser.add_argument('--num_gpu_used', type=int, default=2, help='number of gpu used')
     parser.add_argument('--max_epoch', type=int, default=100, help='max epoch')
