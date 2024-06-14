@@ -45,8 +45,8 @@ class Ferdatamodule(pl.LightningDataModule):
 
     def setup(self, stage=None):
         self.set_up_transforms()
-        self.train_dataset = datasets.ImageFolder(self.train_folder)
-        self.test_dataset = datasets.ImageFolder(self.test_folder)
+        self.train_dataset = datasets.ImageFolder(self.train_folder, transform=self.train_transforms)
+        self.test_dataset = datasets.ImageFolder(self.test_folder, transform=self.test_transforms)
         self.weights = make_weights_for_balanced_classes(self.train_dataset.imgs, len(self.train_dataset.classes))
         self.weights = torch.DoubleTensor(self.weights)
 
@@ -66,10 +66,10 @@ class Ferdatamodule(pl.LightningDataModule):
         ])
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, sampler=self.sampler(self.weights), num_workers=self.num_workers, transforms=self.train_transforms)
+        return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, sampler=self.sampler(self.weights), num_workers=self.num_workers)
 
     def val_dataloader(self):
-        return torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers, transforms=self.test_transforms)
+        return torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers)
     
 
 
