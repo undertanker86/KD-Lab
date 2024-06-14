@@ -8,9 +8,9 @@ from customblock import ChannelAttention, SpatialAttention, CBAM, DepthwiseSepar
 
 
 
-class TripleAuxResNet(nn.Module):
+class TripleAuxResNetFer(nn.Module):
     def __init__(self, resnet_model='resnet18',num_classes=100, pretrained=True):
-        super(TripleAuxResNet, self).__init__()
+        super(TripleAuxResNetFer, self).__init__()
         if resnet_model == 'resnet18':
             self.pretrained_model = models.resnet18(pretrained=pretrained)
             self.expansion = 1

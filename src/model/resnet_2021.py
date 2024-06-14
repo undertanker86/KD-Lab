@@ -6,9 +6,9 @@ import sys
 sys.path.append('src')
 from customblock import ChannelAttention, SpatialAttention, CBAM, DepthwiseSeparableConv2d
 
-class TripleAuxResNetFer(nn.Module):
+class TripleAuxResNet(nn.Module):
     def __init__(self, resnet_model='resnet18',num_classes=100, pretrained=True):
-        super(TripleAuxResNetFer, self).__init__()
+        super(TripleAuxResNet, self).__init__()
         if resnet_model == 'resnet18':
             self.pretrained_model = models.resnet18(pretrained=pretrained)
             self.expansion = 1
