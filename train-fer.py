@@ -197,10 +197,10 @@ class CIFARModel(pl.LightningModule):
         inputs, labels = batch
         student1,student2,student3,softlabel,teacher_logits = self.forward(inputs)
 
-        student1_accuracy = float((torch.max(student1, 1)[1].eq(labels)).cpu().sum()) / len(labels)
-        student2_accuracy = float((torch.max(student2, 1)[1].eq(labels)).cpu().sum()) / len(labels)
-        student3_accuracy = float((torch.max(student3, 1)[1].eq(labels)).cpu().sum()) / len(labels)
-        teacher_accuracy = float((torch.max(teacher_logits, 1)[1].eq(labels)).cpu().sum()) / len(labels)
+        student1_accuracy = accuracy(student1, labels, task="multiclass", num_classes=7)
+        student2_accuracy = accuracy(student2, labels, task="multiclass", num_classes=7)
+        student3_accuracy = accuracy(student3, labels, task="multiclass", num_classes=7)
+        teacher_accuracy = accuracy(teacher_logits, labels, task="multiclass", num_classes=7)
 
         self.log("val_layer1_accuracy", student1_accuracy,sync_dist=True)
         self.log("val_layer2_accuracy", student2_accuracy,sync_dist=True)
@@ -253,7 +253,7 @@ def train(
         callbacks=[model_check_point, lr_monitor],
         log_every_n_steps=2,
         max_epochs = 2 if debug else max_epoch,
-        strategy='ddp_find_unused_parameters_true',
+        strategy='ddp',
 
     
     )
