@@ -130,7 +130,7 @@ class Fermodel(pl.LightningModule):
         x, y = batch
         out = self(x)
         loss = self.loss(out, y)
-        pred = out.argmax(dim=1, keepdim=True)
+        pred = torch.argmax(out, dim=1)
         acc = self.accuracy.update(pred, y)
         self.log("train_loss", loss, on_step=True, on_epoch=True)
         self.log("train_acc", acc, on_step=True, on_epoch=True)
@@ -139,7 +139,7 @@ class Fermodel(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = batch
         out = self(x)
-        pred = out.argmax(dim=1, keepdim=True)
+        pred = torch.argmax(out, dim=1)
         loss = self.loss(out, y)
         acc = self.val_accuracy.update(pred, y)
         self.log("val_loss", loss, on_step=True, on_epoch=True)
