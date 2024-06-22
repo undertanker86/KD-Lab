@@ -12,7 +12,7 @@ from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from src.model.resnet_2021 import TripleAuxResNet
 # from torchmetrics import Accuracy
-from torchmetrics.functional import accuracy
+from torchmetrics.classification import Accuracy
 from torchvision import datasets, transforms
 from torchvision.transforms import v2 as v2_transforms
 
@@ -36,7 +36,7 @@ class CIFAR100DataModule(pl.LightningDataModule):
         transform = transforms.Compose([
             v2_transforms.AutoAugment(policy=v2_transforms.AutoAugmentPolicy.CIFAR10),
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
+            transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))])
         
 
 
@@ -111,7 +111,8 @@ class CIFARModel(pl.LightningModule):
         self.dataset_name = dataset_name
         self.model =  TripleAuxResNet(resnet_model=model, num_classes=100, pretrained=pretrained)
         self.criterion = torch.nn.CrossEntropyLoss()
-
+        self.accuracy = Accuracy(task = "multiclass", num_classes = 100)
+        self.train_accuracy = Accuracy(task = "multiclass", num_classes = 100)
 
         self.optimize_method = optimize_method
         self.scheduler_method = scheduler_method
@@ -152,11 +153,11 @@ class CIFARModel(pl.LightningModule):
         teacher_loss = F.cross_entropy(teacher_logits, labels, reduction='mean')
         student_loss = student1_loss + student2_loss + student3_loss
         loss = self.alpha * student_loss + (1 - self.alpha) * teacher_loss
-        train_accuracy = accuracy(teacher_logits, labels)
+        train_accuracy = self.train_accuracy.update(teacher_logits, labels)
 
-        layer1_accuracy = accuracy(student1, labels)
-        layer2_accuracy = accuracy(student2, labels)
-        layer3_accuracy = accuracy(student3, labels)
+        layer1_accuracy = self.accuracy(student1, labels)
+        layer2_accuracy = self.accuracy(student2, labels)
+        layer3_accuracy = self.accuracy(student3, labels)
 
         self.log("train_accuracy", train_accuracy, sync_dist=True , on_epoch=True)
         self.log("layer1_accuracy", layer1_accuracy, sync_dist=True, on_epoch=True)

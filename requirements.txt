@@ -2,3 +2,5 @@ lightning
 wandb
 torch
 torchvision
+timm
+detectors

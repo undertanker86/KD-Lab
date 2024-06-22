@@ -13,7 +13,7 @@ from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 
 from src.model.resnet_fer import TripleAuxResNetFer
 # from torchmetrics import Accuracy
-from torchmetrics.functional import accuracy
+from torchmetrics.classification import Accuracy
 from torchvision import datasets, transforms
 from torchvision.transforms import v2 as v2_transforms
 
@@ -93,7 +93,11 @@ class CIFARModel(pl.LightningModule):
         self.dataset_name = dataset_name
         self.model =  TripleAuxResNetFer(resnet_model=model, num_classes=7, pretrained=pretrained)
         self.criterion = torch.nn.CrossEntropyLoss()
-
+        self.train_accuracy = Accuracy(task="multiclass", num_classes=7)
+        self.accuracy1 = Accuracy(task="multiclass", num_classes=7)
+        self.accuracy2 = Accuracy(task="multiclass", num_classes=7)
+        self.accuracy3 = Accuracy(task="multiclass", num_classes=7)
+        self.accuracyT = Accuracy(task="multiclass", num_classes=7)
 
         self.optimize_method = optimize_method
         self.scheduler_method = scheduler_method
@@ -134,22 +138,20 @@ class CIFARModel(pl.LightningModule):
         teacher_loss = F.cross_entropy(teacher_logits, labels, reduction='mean')
         student_loss = student1_loss + student2_loss + student3_loss
         loss = self.alpha * student_loss + (1 - self.alpha) * teacher_loss
-        train_accuracy = accuracy(teacher_logits, labels, task="multiclass", num_classes=7)
 
-        layer1_accuracy = accuracy(student1, labels, task="multiclass", num_classes=7)
-        layer2_accuracy = accuracy(student2, labels, task="multiclass", num_classes=7)
-        layer3_accuracy = accuracy(student3, labels, task="multiclass", num_classes=7)
+        teacher_pred = torch.argmax(teacher_logits, 1)
+        train_accuracy = self.train_accuracy.update(teacher_pred, labels)
 
-        self.log("train_accuracy", train_accuracy, sync_dist=True , on_epoch=True)
-        self.log("layer1_accuracy", layer1_accuracy, sync_dist=True, on_epoch=True)
-        self.log("layer2_accuracy", layer2_accuracy, sync_dist=True, on_epoch=True)
-        self.log("layer3_accuracy", layer3_accuracy, sync_dist=True, on_epoch=True)
+
+        self.log("train_accuracy", train_accuracy, sync_dist=True , on_epoch=True, on_step=
         self.log("layer1_loss", student1_loss)
         self.log("layer2_loss", student2_loss)
         self.log("layer3_loss", student3_loss)
         self.log("train_loss", loss)
         
         return loss
+    
+    
 
     def on_after_backward(self):
         for name, param in self.named_parameters():
@@ -196,19 +198,42 @@ class CIFARModel(pl.LightningModule):
     def validation_step(self, batch, batch_idx) -> torch.Tensor | os.Mapping[str, torch.Any] | None:
         inputs, labels = batch
         student1,student2,student3,softlabel,teacher_logits = self.forward(inputs)
-
-        student1_accuracy = accuracy(student1, labels, task="multiclass", num_classes=7)
-        student2_accuracy = accuracy(student2, labels, task="multiclass", num_classes=7)
-        student3_accuracy = accuracy(student3, labels, task="multiclass", num_classes=7)
-        teacher_accuracy = accuracy(teacher_logits, labels, task="multiclass", num_classes=7)
-
+        student1_pred = torch.argmax(student1, 1)
+        student2_pred = torch.argmax(student2, 1)
+        student3_pred = torch.argmax(student3, 1)
+        teacher__pred = torch.argmax(teacher_logits, 1)
+        student1_accuracy = self.accuracy1.update(student1_pred, labels)
+        student2_accuracy = self.accuracy2.update(student2_pred, labels)
+        student3_accuracy = self.accuracy3.update(student3_pred, labels)
+        teacher_accuracy = self.accuracyT.update(teacher__pred, labels)
+        # self.accuracy.update(preds, labels)
         self.log("val_layer1_accuracy", student1_accuracy,sync_dist=True)
         self.log("val_layer2_accuracy", student2_accuracy,sync_dist=True)
         self.log("val_layer3_accuracy", student3_accuracy,sync_dist=True)
 
         self.log("val_teacher_accuracy", teacher_accuracy,sync_dist=True)
-        return teacher_accuracy
+        return {
+            'student1_accuracy': student1_accuracy,
+            'student2_accuracy': student2_accuracy,
+            'student3_accuracy': student3_accuracy,
+            'teacher_accuracy': teacher_accuracy
+        }
         
+    def on_validation_epoch_end(self) -> None:
+        acc1 = self.accuracy1.compute()
+        self.accuracy1.reset()
+        acc2 = self.accuracy2.compute()
+        self.accuracy2.reset()
+        acc3 = self.accuracy3.compute()
+        self.accuracy3.reset()
+        accT = self.accuracyT.compute()
+        self.accuracyT.reset()
+        self.log("val/acc_teacher", accT, sync_dist=True)
+        self.log("val/acc_student2", acc2, sync_dist=True)
+        self.log("val/acc_student3", acc3, sync_dist=True)
+        self.log("val/acc_student1", acc1, sync_dist=True)
+        self.log("val_epoch", self.current_epoch, sync_dist=True)       
+
 def train(
     train_folder: str = "/kaggle/input/fer2013/train",
     test_folder: str = "/kaggle/input/fer2013/test",
@@ -219,7 +244,7 @@ def train(
     learning_rate: float = 0.01,
     num_lr_warm_up_epoch: int = 10,
     temperature: float = 4.0,
-    dataset_name: str = "cifar100",
+    dataset_name: str = "fer2013",
     optimize_method: str = "sgd",
     scheduler_method: str = "cosine_annealingLR",
     alpha: float = 0.3,
