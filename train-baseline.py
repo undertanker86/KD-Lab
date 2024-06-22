@@ -182,7 +182,7 @@ def train(
     model_check_point = ModelCheckpoint(
         checkpoint_dir,
         filename = f"resnet18_separable_{dataset_name}",
-        monitor = "val_teacher_accuracy",
+        monitor = "val_acc",
     )
     lr_monitor = LearningRateMonitor(logging_interval='epoch')
     trainer = pl.Trainer(max_epochs=100, devices=num_gpu_used, accelerator="gpu",strategy="ddp", logger=logger,
