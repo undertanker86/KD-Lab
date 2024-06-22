@@ -147,10 +147,10 @@ class Fermodel(pl.LightningModule):
         return loss
     
     def configure_optimizers(self):
-        if self.optimize_method == "Adam":
-            optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        elif self.scheduler_method == "CosineAnnealing":
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,T_max=self.max_epoch, eta_min=0, last_epoch=-1)
+    
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,T_max=self.max_epoch, eta_min=0, last_epoch=-1)
         return [optimizer], [scheduler]
 
 def train(
