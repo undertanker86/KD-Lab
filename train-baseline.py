@@ -184,3 +184,21 @@ def train(
     callbacks=[model_check_point, lr_monitor])
                          
     trainer.fit(model, datamodule=datamodule)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--train_folder", type=str, default="/kaggle/input/fer2013/train")
+    parser.add_argument("--test_folder", type=str, default="/kaggle/input/fer2013/test")
+    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--num_workers", type=int, default=2)
+    parser.add_argument("--num_gpu_used", type=int, default=2)
+    parser.add_argument("--max_epoch", type=int, default=100)
+    parser.add_argument("--learning_rate", type=float, default=0.001)
+    parser.add_argument("--dataset_name", type=str, default="fer2013")
+    parser.add_argument("--optimize_method", type=str, default="adam")
+    parser.add_argument("--scheduler_method", type=str, default="CosineAnnealing")
+    parser.add_argument("--model", type=str, default="resnet18")
+    parser.add_argument("--debug", type=bool, default=False)
+    parser.add_argument("--ckpt_path", type=str, default=None)
+    args = parser.parse_args()
+    train(**vars(parser.parse_args()))
