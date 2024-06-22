@@ -131,7 +131,7 @@ class Fermodel(pl.LightningModule):
         out = self(x)
         loss = self.loss(out, y)
         pred = torch.argmax(out, dim=1)
-        acc = self.accuracy.update(pred, y)
+        acc = self.train_accuracy.update(pred, y)
         self.log("train_loss", loss, on_step=True, on_epoch=True)
         # self.log("train_acc", acc, on_step=True, on_epoch=True)
         return loss
