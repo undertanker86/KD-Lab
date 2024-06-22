@@ -133,9 +133,13 @@ class Fermodel(pl.LightningModule):
         pred = torch.argmax(out, dim=1)
         acc = self.accuracy.update(pred, y)
         self.log("train_loss", loss, on_step=True, on_epoch=True)
-        self.log("train_acc", acc, on_step=True, on_epoch=True)
+        # self.log("train_acc", acc, on_step=True, on_epoch=True)
         return loss
     
+    def on_train_epoch_end(self):
+        self.log("train_acc", self.train_accuracy.compute())
+        self.train_accuracy.reset()
+
     def validation_step(self, batch, batch_idx):
         x, y = batch
         out = self(x)
@@ -143,9 +147,11 @@ class Fermodel(pl.LightningModule):
         loss = self.loss(out, y)
         acc = self.val_accuracy.update(pred, y)
         self.log("val_loss", loss, on_step=True, on_epoch=True)
-        self.log("val_acc", acc, on_step=True, on_epoch=True)
+        # self.log("val_acc", acc, on_step=True, on_epoch=True)
         return loss
-    
+    def on_validate_epoch_end(self):
+        self.log("val_acc", self.val_accuracy.compute())
+        self.val_accuracy.reset()
     def configure_optimizers(self):
     
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)

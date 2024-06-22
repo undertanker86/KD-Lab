@@ -143,7 +143,7 @@ class CIFARModel(pl.LightningModule):
         train_accuracy = self.train_accuracy.update(teacher_pred, labels)
 
 
-        self.log("train_accuracy", train_accuracy, sync_dist=True , on_epoch=True, on_step=
+        self.log("train_accuracy", train_accuracy, sync_dist=True , on_epoch=True, on_step=True)
         self.log("layer1_loss", student1_loss)
         self.log("layer2_loss", student2_loss)
         self.log("layer3_loss", student3_loss)
