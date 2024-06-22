@@ -109,7 +109,7 @@ class Fermodel(pl.LightningModule):
         self.train_accuracy = Accuracy(task="multiclass", num_classes=num_classes)
         self.val_accuracy = Accuracy(task="multiclass", num_classes=num_classes)
         self.num_classes = num_classes
-        self.lr = learning_rate
+
 
         self.optimize_method = optimize_method
         self.scheduler_method = scheduler_method
