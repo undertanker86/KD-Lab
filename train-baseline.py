@@ -104,7 +104,7 @@ class Fermodel(pl.LightningModule):
                  ) -> None:
         super().__init__()
         self.save_hyperparameters
-        self.model = MobileNetV2CBAM()
+        self.model = MobileNetV2CBAM(num_classes=num_classes)
         self.loss = torch.nn.CrossEntropyLoss()
         self.train_accuracy = Accuracy(task="multiclass", num_classes=num_classes)
         self.val_accuracy = Accuracy(task="multiclass", num_classes=num_classes)
