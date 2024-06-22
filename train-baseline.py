@@ -109,7 +109,7 @@ class Fermodel(pl.LightningModule):
         self.train_accuracy = Accuracy(task="multiclass", num_classes=num_classes)
         self.val_accuracy = Accuracy(task="multiclass", num_classes=num_classes)
         self.num_classes = num_classes
-
+        self.lr = learning_rate
 
         self.optimize_method = optimize_method
         self.scheduler_method = scheduler_method
@@ -148,10 +148,10 @@ class Fermodel(pl.LightningModule):
     
     def configure_optimizers(self):
         if self.optimize_method == "Adam":
-            return torch.optim.Adam(self.parameters(), lr=0.001)
-        if self.scheduler_method == "CosineAnnealing":
-            return torch.optim.Adam(self.parameters(), lr=0.001), torch.optim.lr_scheduler.CosineAnnealingLR(self.max_epoch, eta_min=0, last_epoch=-1)
-        
+            optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        elif self.scheduler_method == "CosineAnnealing":
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,T_max=self.max_epoch, eta_min=0, last_epoch=-1)
+        return [optimizer], [scheduler]
 
 def train(
     train_folder: str = "/kaggle/input/fer2013/train",
