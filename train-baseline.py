@@ -131,13 +131,12 @@ class Fermodel(pl.LightningModule):
         out = self(x)
         loss = self.loss(out, y)
         pred = torch.argmax(out, dim=1)
-        acc = self.train_accuracy.update(pred, y)
-        self.log("train_loss", loss, on_step=True, on_epoch=True)
-        # self.log("train_acc", acc, on_step=True, on_epoch=True)
+        acc = self.train_accuracy(pred, y)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, sync_dist=True)
+        self.log("train_acc", acc, on_step=True, on_epoch=True)
         return loss
     
     def on_train_epoch_end(self):
-        self.log("train_acc", self.train_accuracy.compute())
         self.train_accuracy.reset()
 
     def validation_step(self, batch, batch_idx):
@@ -145,8 +144,8 @@ class Fermodel(pl.LightningModule):
         out = self(x)
         pred = torch.argmax(out, dim=1)
         loss = self.loss(out, y)
-        acc = self.val_accuracy.update(pred, y)
-        self.log("val_loss", loss, on_step=True, on_epoch=True)
+        self.val_accuracy.update(pred, y)
+        self.log("val_loss", loss, on_step=True, on_epoch=True, sync_dist=True)
         # self.log("val_acc", acc, on_step=True, on_epoch=True)
         return loss
     def on_validate_epoch_end(self):
@@ -177,7 +176,7 @@ def train(
     ckpt_path:str = None):
     pl.seed_everything(42)
     datamodule = Ferdatamodule(batch_size=batch_size, train_folder=train_folder, test_folder=test_folder, num_workers=num_workers)
-    model = Fermodel(num_classes=7, scheduler_method=scheduler_method, optimize_method=optimize_method, max_epoch=max_epoch, num_gpu_used=num_gpu_used, learning_rate = learning_rate)
+    model = Fermodel(num_classes=7, scheduler_method=scheduler_method, optimize_method=optimize_method, max_epoch=max_epoch, num_gpu_used=num_gpu_used, learning_rate = learning_rate,)
     logger = WandbLogger(project="BYOT")
     model_check_point = ModelCheckpoint(
         checkpoint_dir,
