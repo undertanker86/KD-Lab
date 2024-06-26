@@ -7,7 +7,7 @@ from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 
-class Lightningmodel(L.LightningModule):
+class LightningModel(L.LightningModule):
     def __init__(self, model, learning_rate, optimizer, lr_scheduler, max_epoch):
         super().__init__()
         self.model = model
