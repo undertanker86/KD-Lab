@@ -58,7 +58,7 @@ class LightningModel(L.LightningModule):
         if self.optimizer == "adam":
             optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         elif self.optimizer == "sgd":
-            optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0.9 , weight_decay=1e-4)
+            optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0.9 , weight_decay=5e-4)
         elif self.optimizer == "adam_wav2vec2.0":
             optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, betas=(0.9, 0.98), eps=1e-6) # wav2vec2,0's optimizer set up on Adam. (Need to verify)
         elif self.optimizer == "adam":
