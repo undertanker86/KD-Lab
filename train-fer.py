@@ -26,13 +26,14 @@ class FerModel(nn.Module):
         super(FerModel, self).__init__()
         self.backbone = timm.create_model(model_name=model_name, pretrained=False, features_only=True)
         self.backbone.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        self.backbone.maxpool = nn.Identity()
 
-        self.adapter1 = AdapterResnet1(SepConv, CBAM, num_classes = 7)
-        self.adapter2 = AdapterResnet2(SepConv, CBAM, num_classes = 7)
-        self.adapter3 = AdapterResnet3(SepConv, CBAM, num_classes=7)
+        self.adapter1 = AdapterResnet1(SepConv, CBAM, num_classes = 7, pool_size=(1, 1))
+        self.adapter2 = AdapterResnet2(SepConv, CBAM, num_classes = 7, pool_size=(1, 1))
+        self.adapter3 = AdapterResnet3(SepConv, CBAM, num_classes=7, pool_size=(1, 1))
 
 
-        self.classifier = CustomHead(in_planes=512, num_classes=7, pool_size=(4, 4))
+        self.classifier = CustomHead(in_planes=512, num_classes=7, pool_size=(1, 1))
     def forward(self, x):
         x = self.backbone(x)
         fea1 = x[1]#16x16
@@ -219,7 +220,8 @@ def train():
         callbacks=callbacks,
         log_every_n_steps=100,
         logger=WandbLogger(project="BYOT"),
-        deterministic=True,
+        # deterministic=True,
+        # enable_model_summary=True
     )
 
     trainer.fit(model=lightning_model, datamodule=dm)
