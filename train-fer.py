@@ -8,14 +8,8 @@ import lightning as L
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
-from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import LearningRateMonitor
-from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-
-# from src.model.resnet_fer import TripleAuxResNetFer
-# from torchmetrics import Accuracy
+from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.callbacks import ModelCheckpoint
 import timm
 import torchmetrics
 from torchvision import datasets, transforms
