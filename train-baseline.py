@@ -7,10 +7,10 @@ from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
 import timm
 import torchmetrics
 from torchvision import datasets, transforms
-from torchvision.transforms import v2 as v2_transforms
+# from torchvision.transforms import v2 as v2_transforms
 
 import argparse
-import os
+# import os
 from helper import Fer2013DataModule, FerPlusDataModule
 
 class Resnet34Fer(nn.Module):
@@ -26,13 +26,13 @@ class Resnet34Fer(nn.Module):
     
 
 class LightningFer(L.LightningModule):
-    def __init__(self, model, learning_rate=1e-3):
+    def __init__(self, model, learning_rate=1e-3,num_classes=7):
         super().__init__()
         self.model = model
         self.learning_rate = learning_rate
-        self.train_acc = torchmetrics.Accuracy()
-        self.val_acc = torchmetrics.Accuracy()
-        self.test_acc = torchmetrics.Accuracy()
+        self.train_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
+        self.val_acc = torchmetrics.Accuracy(task="multiclass",num_classes=num_classes)
+        self.test_acc = torchmetrics.Accuracy(task="multiclass",num_classes=num_classes)
 
     def forward(self, x):
         return self.model(x)
@@ -84,6 +84,7 @@ def train(dataset_name="fer2013"):
     IMAGENET_MEAN = [0.485, 0.456, 0.406]
     IMAGENET_STD = [0.229, 0.224, 0.225]
     target_size = 48
+    num_classes = 7
     train_transform = transforms.Compose([
         transforms.RandomResizedCrop(target_size, scale=(0.8, 1.2)),
         transforms.RandomApply([transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
@@ -98,6 +99,7 @@ def train(dataset_name="fer2013"):
         transforms.Normalize(mean=IMAGENET_MEAN, std=    IMAGENET_STD)
     ])
     if dataset_name == "fer2013":
+        
         dm = Fer2013DataModule(
         data_path="/kaggle/input/fer2013/train",
         test_path="/kaggle/input/fer2013/test",
@@ -108,6 +110,7 @@ def train(dataset_name="fer2013"):
         num_workers=4
         )
     elif dataset_name == "ferplus":
+        num_classes = 8
         dm = FerPlusDataModule(
         train_path="/kaggle/input/fer-plus/fer_plus/train",
         val_path="/kaggle/input/fer-plus/fer_plus/val",
@@ -120,18 +123,19 @@ def train(dataset_name="fer2013"):
         )
     
     
-    model = Resnet34Fer(pretrained=False, num_classes=7)
-    lightning_model = LightningFer(model=model, learning_rate=0.01)
+    model = Resnet34Fer(pretrained=False, num_classes=num_classes)
+    lightning_model = LightningFer(model=model, learning_rate=0.01,num_classes=num_classes)
 
     trainer = L.Trainer(
         max_epochs=100,
         devices=2,
         strategy="ddp",
-        callbacks=[ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc")],
+        callbacks=[ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc"), LearningRateMonitor(logging_interval="epoch")],
         logger=WandbLogger(project="BYOT"),
     )
 
     trainer.fit(lightning_model, dm)
+    
     trainer.test(lightning_model, dm, ckpt_path="best")
 
 if __name__ == '__main__':
