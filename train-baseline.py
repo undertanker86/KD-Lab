@@ -40,7 +40,7 @@ class LightningFer(L.LightningModule):
     def _shared_step(self, batch, batch_idx):
         features, true_labels = batch
         logits = self.forward(features)
-        loss = F.cross_entropy(logits, y)
+        loss = F.cross_entropy(logits, true_labels)
         predicted_labels = torch.argmax(logits, dim=1)
         return loss, true_labels, predicted_labels
 
