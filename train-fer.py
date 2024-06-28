@@ -3,305 +3,231 @@ import os
 import sys
 
 import pytorch_lightning as pl
+import lightning as L
+
 import torch
 import torch.nn.functional as F
+import torch.nn as nn
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 
-from src.model.resnet_fer import TripleAuxResNetFer
+# from src.model.resnet_fer import TripleAuxResNetFer
 # from torchmetrics import Accuracy
-from torchmetrics.classification import Accuracy
+import timm
+import torchmetrics
 from torchvision import datasets, transforms
 from torchvision.transforms import v2 as v2_transforms
 
-from src.distil_loss import BYOT, DistilKL, Similarity
-def make_weights_for_balanced_classes(images, nclasses):                        
-    count = [0] * nclasses                                                      
-    for item in images:                                                         
-        count[item[1]] += 1                                                     
-    weight_per_class = [0.] * nclasses                                      
-    N = float(sum(count))                                                   
-    for i in range(nclasses):                                                   
-        weight_per_class[i] = N/float(count[i])                                 
-    weight = [0] * len(images)                                              
-    for idx, val in enumerate(images):                                          
-        weight[idx] = weight_per_class[val[1]]                                  
-    return weight 
-
-class Ferdatamodule(pl.LightningDataModule):
-    def __init__(self,train_folder='/kaggle/input/fer2013/train', 
-                 test_folder='/kaggle/input/fer2013/test',
-                 batch_size=64, num_workers=4) -> None:
-        super().__init__()
-        self.train_folder = train_folder
-        self.test_folder = test_folder
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-
-        self.sampler = torch.utils.data.sampler.WeightedRandomSampler
-
-    def setup(self, stage=None):
-        self.set_up_transforms()
-        self.train_dataset = datasets.ImageFolder(self.train_folder, transform=self.train_transforms)
-        self.test_dataset = datasets.ImageFolder(self.test_folder, transform=self.test_transforms)
-        self.weights = make_weights_for_balanced_classes(self.train_dataset.imgs, len(self.train_dataset.classes))
-        self.weights = torch.DoubleTensor(self.weights)
-
-    def set_up_transforms(self):
-        self.train_transforms = transforms.Compose([
-            transforms.Resize(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(10),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
-
-        self.test_transforms = transforms.Compose([
-            transforms.Resize(224),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
-
-    def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, sampler=self.sampler(self.weights, len(self.train_dataset)), num_workers=self.num_workers)
-
-    def val_dataloader(self):
-        return torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers)
-    
+from src.distil_loss import DistilKL, Similarity, KDLoss
+from src.model import AdapterResnet1, AdapterResnet2 ,AdapterResnet3, SepConv, CustomHead
+from src.customblock import CBAM
+from helper import Fer2013DataModule
 
 
+class FerModel(nn.Module):
+    def __init__(self, model_name):
+        super(FerModel, self).__init__()
+        self.backbone = timm.create_model(model_name=model_name, pretrained=False, features_only=True)
+        self.backbone.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
 
-class CIFARModel(pl.LightningModule):
-    def __init__(self,
-                 num_gpu_used:int,
-                 max_epoch:int,
-                 learning_rate:float,
-                 num_lr_warm_up_epoch:int,
-                 temperature:float, 
-                 dataset_name:str,
-                 optimize_method:str,
-                 scheduler_method:str,
-                 alpha:float,
-                 model = 'resnet18',
-                 pretrained:bool = False,
-                 ):
-        super().__init__()
-        self.save_hyperparameters()
-        self.dataset_name = dataset_name
-        self.model =  TripleAuxResNetFer(resnet_model=model, num_classes=7, pretrained=pretrained)
-        self.criterion = torch.nn.CrossEntropyLoss()
-        self.train_accuracy = Accuracy(task="multiclass", num_classes=7)
-        self.accuracy1 = Accuracy(task="multiclass", num_classes=7)
-        self.accuracy2 = Accuracy(task="multiclass", num_classes=7)
-        self.accuracy3 = Accuracy(task="multiclass", num_classes=7)
-        self.accuracyT = Accuracy(task="multiclass", num_classes=7)
-
-        self.optimize_method = optimize_method
-        self.scheduler_method = scheduler_method
-        self.alpha = alpha
-        if num_gpu_used == 1:
-            self.max_epoch = max_epoch
-            self.lr = learning_rate
-            self.num_lr_warm_up_epoch = num_lr_warm_up_epoch
-            self.temperature = temperature
-        else:
-            self.register_buffer("max_epoch", torch.tensor(max_epoch))
-            self.register_buffer("lr", torch.tensor(learning_rate))
-            self.register_buffer("num_lr_warm_up_epoch", torch.tensor(num_lr_warm_up_epoch))
-            self.register_buffer("temperature", torch.tensor(temperature))
+        self.adapter1 = AdapterResnet1(SepConv, CBAM, num_classes = 7)
+        self.adapter2 = AdapterResnet2(SepConv, CBAM, num_classes = 7)
+        self.adapter3 = AdapterResnet3(SepConv, CBAM, num_classes=7)
 
 
-     
-    
+        self.classifier = CustomHead(in_planes=512, num_classes=7, pool_size=(4, 4))
     def forward(self, x):
-        """One foward pass of self-distilation training"""
-        student1,student2,student3,teacher_logits = self.model(x)
-        softlabel = F.softmax(teacher_logits/self.temperature, dim=1)
-        return student1,student2,student3,softlabel,teacher_logits
-   
+        x = self.backbone(x)
+        fea1 = x[1]#16x16
+        fea2 = x[2]#8x8
+        fea3 = x[3]#4x4
+        logit1 = self.adapter1(fea1)
+        logit2 = self.adapter2(fea2)
+        logit3 = self.adapter3(fea3)
+        logit4 = self.classifier(x[4])
+        return [logit1, logit2, logit3, logit4],[fea1, fea2, fea3, x[4]]
+
+
+
+class LightningFerModel(L.LightningModule):
+    def __init__(
+        self,
+        model: nn.Module,
+        learning_rate: float,
+        optimizer: str,
+        lr_scheduler: str,
+        max_epoch: int,
+        num_classes: int = 7,
+        loss_alpha = 0.3,
+        distil_temp = 3.0
+    ) -> None:
+        """
+        Initialize a LightningFerModel object.
+
+        Args:
+            model (nn.Module): The model to use.
+            learning_rate (float): The learning rate for the optimizer.
+            optimizer (str): The optimizer to use.
+            lr_scheduler (str): The learning rate scheduler to use.
+            max_epoch (int): The maximum number of training epochs.
+            num_classes (int): The number of classes for the model. Defaults to 7.
+
+        Returns:
+            None
+        """
+        super().__init__()
+        self.model = model
+        self.optimizer = optimizer
+        self.max_epoch = max_epoch
+        self.lr_scheduler = lr_scheduler
+        self.learning_rate = learning_rate
+        self.loss_alpha = loss_alpha
+        self.distil_temp = distil_temp
+        self.save_hyperparameters(ignore=["model"])
+
+        self.train_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
+        self.val_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
+        self.test_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
+
+        for i in range(4):
+            self.__setattr__(f"train_acc{i+1}", torchmetrics.Accuracy(task="multiclass", num_classes=num_classes))
+            self.__setattr__(f"val_acc{i+1}", torchmetrics.Accuracy(task="multiclass", num_classes=num_classes))
+            self.__setattr__(f"test_acc{i+1}", torchmetrics.Accuracy(task="multiclass", num_classes=num_classes))
+        
+    def forward(self, x):
+        return self.model(x)
+
+    def _shared_step(self, batch):
+        features, true_labels = batch
+        logits, fea = self(features)
+        loss = 0
+        predicted_labels = []
+        for i in range(3):
+            loss += F.cross_entropy(logits[i], true_labels)* (1-self.loss_alpha)
+            loss += KDLoss(temp=self.distil_temp, alpha=self.loss_alpha)(logits[i], logits[3].detach())
+
+            predicted_labels.append(torch.argmax(logits[i], dim=1))
+        loss += F.cross_entropy(logits[3], true_labels)
+        predicted_labels.append(torch.argmax(logits[3], dim=1))
+        # loss = F.cross_entropy(logits, true_labels)
+        # predicted_labels = torch.argmax(logits, dim=1)
+        return loss, true_labels, predicted_labels
+
     def training_step(self, batch, batch_idx):
-        inputs, labels = batch
-        student1,student2,student3, softlabel,teacher_logits = self.forward(inputs)
-        
-        student1_kl_loss = F.kl_div(F.log_softmax(student1/self.temperature, dim=1), softlabel, reduction='mean')
-        student2_kl_loss = F.kl_div(F.log_softmax(student2/self.temperature, dim=1), softlabel, reduction='mean')
-        student3_kl_loss = F.kl_div(F.log_softmax(student3/self.temperature, dim=1), softlabel, reduction='mean')
-        student1_ce_loss = F.cross_entropy(student1, labels, reduction='mean')
-        student2_ce_loss = F.cross_entropy(student2, labels, reduction='mean')
-        student3_ce_loss = F.cross_entropy(student3, labels, reduction='mean')
-        student1_loss = student1_kl_loss + student1_ce_loss
-        student2_loss = student2_kl_loss + student2_ce_loss
-        student3_loss = student3_kl_loss + student3_ce_loss
-        teacher_loss = F.cross_entropy(teacher_logits, labels, reduction='mean')
-        student_loss = student1_loss + student2_loss + student3_loss
-        loss = self.alpha * student_loss + (1 - self.alpha) * teacher_loss
+        loss, true_labels, predicted_labels = self._shared_step(batch)
 
-        teacher_pred = torch.argmax(teacher_logits, 1)
-        train_accuracy = self.train_accuracy.update(teacher_pred, labels)
-
-
-        self.log("train_accuracy", train_accuracy, sync_dist=True , on_epoch=True, on_step=True)
-        self.log("layer1_loss", student1_loss)
-        self.log("layer2_loss", student2_loss)
-        self.log("layer3_loss", student3_loss)
         self.log("train_loss", loss)
-        
-        return loss
-    
-    
+        for i in range(4):
+            self.log(f"train_acc{i+1}", self.__getattr__(f"train_acc{i+1}",on_epoch=True, on_step=False)(predicted_labels[i], true_labels))
 
-    def on_after_backward(self):
-        for name, param in self.named_parameters():
-            if param.grad is None:
-                print(name)
-    
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss, true_labels, predicted_labels = self._shared_step(batch)
+
+        self.log("val_loss", loss, prog_bar=True)
+        for i in range(4):
+            self.log(f"val_acc{i+1}", self.__getattr__(f"val_acc{i+1}",on_epoch=True, on_step=False)(predicted_labels[i], true_labels))
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        loss, true_labels, predicted_labels = self._shared_step(batch)
+        for i in range(4):
+            self.log(f"test_acc{i+1}", self.__getattr__(f"test_acc{i+1}",on_epoch=True, on_step=False)(predicted_labels[i], true_labels))
+        return loss
+
     def configure_optimizers(self):
-        if self.optimize_method == "adam":
-            optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        elif self.optimize_method == "sgd":
-            optimizer = torch.optim.SGD(self.parameters(), lr=self.lr, momentum=0.9 , weight_decay=5e-4)
-        elif self.optimize_method == "adam_wav2vec2.0":
-            optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, betas=(0.9, 0.98), eps=1e-6) # wav2vec2,0's optimizer set up on Adam. (Need to verify)
-        elif self.optimize_method == "adam":
-            optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, eps=1e-6) # distilBert's optimzer setup on Adam
-        elif self.optimize_method == "adamW":
-            optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, betas=(0.9, 0.98), eps=1e-6)
+        if self.optimizer == "adam":
+            optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        elif self.optimizer == "sgd":
+            optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0.9 , weight_decay=5e-4)
+        elif self.optimizer == "adam_wav2vec2.0":
+            optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, betas=(0.9, 0.98), eps=1e-6) # wav2vec2,0's optimizer set up on Adam. (Need to verify)
+        elif self.optimizer == "adam":
+            optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, eps=1e-6) # distilBert's optimzer setup on Adam
+        elif self.optimizer == "adamW":
+            optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, betas=(0.9, 0.98), eps=1e-4)
         else:
             raise NotImplementedError
-        if self.scheduler_method == "":
+        if self.lr_scheduler == "":
             return optimizer
-        elif self.scheduler_method == "linear_decay_with_warm_up":
+        elif self.lr_scheduler == "linear_decay_with_warm_up":
             def lr_lambda(current_epoch): # Copied from https://github.com/huggingface/transformers/blob/master/src/transformers/optimization.py
                 if current_epoch < self.num_lr_warm_up_epoch:
                     return float(current_epoch+1) / float(max(1, self.num_lr_warm_up_epoch)) # current_epoch+1 to prevent lr=0 in epoch 0
                 return max(
                     0.0, float(self.max_epoch - current_epoch) / float(max(1, self.max_epoch - self.num_lr_warm_up_epoch)))
             scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
-        elif self.scheduler_method == "cosine_warmup_anneal":
+        elif self.lr_scheduler == "cosine_warmup_anneal":
             scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=9, T_mult=1, eta_min=1e-6)
-        elif self.scheduler_method == "OneCycleLR":
+        elif self.lr_scheduler == "OneCycleLR":
             scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=len(self.train_dataloader())//256, epochs=self.max_epoch)
-        elif self.scheduler_method == "StepLR":
+        elif self.lr_scheduler == "StepLR":
             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.2)
-        elif self.scheduler_method == "MultiStepLR":
+        elif self.lr_scheduler == "MultiStepLR":
             scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 90, 120], gamma=0.2)
-        elif self.scheduler_method == "cosine_annealingLR":
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=280, eta_min=1e-6)
+        elif self.lr_scheduler == "cosine_annealingLR":
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.max_epoch, eta_min=1e-6)
+        elif self.lr_scheduler == "ReduceLROnPlateau":
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.75, patience=5, verbose=True)
         else:
             raise NotImplementedError
 
         return [optimizer], [scheduler]
-    
-    def validation_step(self, batch, batch_idx) -> torch.Tensor | os.Mapping[str, torch.Any] | None:
-        inputs, labels = batch
-        student1,student2,student3,softlabel,teacher_logits = self.forward(inputs)
-        student1_pred = torch.argmax(student1, 1)
-        student2_pred = torch.argmax(student2, 1)
-        student3_pred = torch.argmax(student3, 1)
-        teacher__pred = torch.argmax(teacher_logits, 1)
-        student1_accuracy = self.accuracy1.update(student1_pred, labels)
-        student2_accuracy = self.accuracy2.update(student2_pred, labels)
-        student3_accuracy = self.accuracy3.update(student3_pred, labels)
-        teacher_accuracy = self.accuracyT.update(teacher__pred, labels)
-        # self.accuracy.update(preds, labels)
-        self.log("val_layer1_accuracy", student1_accuracy,sync_dist=True)
-        self.log("val_layer2_accuracy", student2_accuracy,sync_dist=True)
-        self.log("val_layer3_accuracy", student3_accuracy,sync_dist=True)
 
-        self.log("val_teacher_accuracy", teacher_accuracy,sync_dist=True)
-        return {
-            'student1_accuracy': student1_accuracy,
-            'student2_accuracy': student2_accuracy,
-            'student3_accuracy': student3_accuracy,
-            'teacher_accuracy': teacher_accuracy
-        }
-        
-    def on_validation_epoch_end(self) -> None:
-        acc1 = self.accuracy1.compute()
-        self.accuracy1.reset()
-        acc2 = self.accuracy2.compute()
-        self.accuracy2.reset()
-        acc3 = self.accuracy3.compute()
-        self.accuracy3.reset()
-        accT = self.accuracyT.compute()
-        self.accuracyT.reset()
-        self.log("val/acc_teacher", accT, sync_dist=True)
-        self.log("val/acc_student2", acc2, sync_dist=True)
-        self.log("val/acc_student3", acc3, sync_dist=True)
-        self.log("val/acc_student1", acc1, sync_dist=True)
-        self.log("val_epoch", self.current_epoch, sync_dist=True)       
-
-def train(
-    train_folder: str = "/kaggle/input/fer2013/train",
-    test_folder: str = "/kaggle/input/fer2013/test",
-    batch_size: int = 128,
-    num_workers: int = 2,
-    num_gpu_used: int = 2,
-    max_epoch: int = 100,
-    learning_rate: float = 0.01,
-    num_lr_warm_up_epoch: int = 10,
-    temperature: float = 4.0,
-    dataset_name: str = "fer2013",
-    optimize_method: str = "sgd",
-    scheduler_method: str = "cosine_annealingLR",
-    alpha: float = 0.3,
-    model = 'resnet18',
-    checkpoint_dir: str = "checkpoints",
-    accelerator: str = "gpu",
-    debug: bool = False,
-    ckpt_path:str = None
-    ):
-
-    
-    datamodule = Ferdatamodule(train_folder, test_folder, batch_size, num_workers)
-    datamodule.setup()
-    model = CIFARModel(num_gpu_used, max_epoch, 
-                       learning_rate, num_lr_warm_up_epoch, 
-                       temperature, dataset_name, 
-                       optimize_method, scheduler_method, 
-                       alpha, model)
-    pl.seed_everything(42)
-    model_check_point = ModelCheckpoint(
-        checkpoint_dir,
-        filename = f"resnet18_separable_{dataset_name}",
-        monitor = "val_teacher_accuracy",
+ImageNetMEAN = [0.485, 0.456, 0.406]
+ImageNetSTD = [0.229, 0.224, 0.225]
+def train():
+    train_transform = transforms.Compose(
+        [
+            transforms.Resize(32),
+            transforms.CenterCrop(32),
+            transforms.RandomHorizontalFlip(),
+            # transforms.RandomApply([transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
+            transforms.TrivialAugmentWide(),
+            transforms.ToTensor(),
+            transforms.Normalize(ImageNetMEAN, ImageNetSTD),
+            
+        ]
     )
-    lr_monitor = LearningRateMonitor(logging_interval='epoch')
-    logger = WandbLogger(project="BYOT")
-    trainer = pl.Trainer(
-        accelerator=accelerator, 
-        devices=num_gpu_used, 
-        logger=logger, 
-        callbacks=[model_check_point, lr_monitor],
-        log_every_n_steps=2,
-        max_epochs = 2 if debug else max_epoch,
-        strategy='ddp',
-
-    
+    test_transform = transforms.Compose(
+        [
+            transforms.Resize(32),
+            transforms.ToTensor(),
+            transforms.Normalize(ImageNetMEAN, ImageNetSTD),
+        ]
     )
-    trainer.fit(model, datamodule=datamodule, ckpt_path=ckpt_path)
+    L.seed_everything(2024)
+    dm = Fer2013DataModule(
+        data_path="/kaggle/input/fer2013/train",
+        test_path="/kaggle/input/fer2013/test",
+        height_width=(32, 32),
+        batch_size=256, 
+        train_transform=train_transform, 
+        test_transform=test_transform,
+        num_workers=4
+    )
+    pytorch_model = FerModel(model_name='resnet18')
+    lightning_model = LightningFerModel(model=pytorch_model, learning_rate=0.01, optimizer="SGD", lr_scheduler="cosine_annealingLR", max_epoch=200)
+    callbacks = [ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc"), LearningRateMonitor(logging_interval="step")]
+
+    trainer = L.Trainer(
+        max_epochs=200,
+        accelerator="gpu",
+        devices=2,
+        strategy="ddp",
+        callbacks=callbacks,
+        log_every_n_steps=100,
+        logger=WandbLogger(project="BYOT"),
+        deterministic=True,
+    )
+
+    trainer.fit(model=lightning_model, datamodule=dm)
+    trainer.test(lightning_model, datamodule=dm,ckpt_path='best')
+
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--debug', action='store_true', help='debug mode')
-    parser.add_argument('--train_folder', type=str, default='/kaggle/input/fer2013/train', help='data directory')
-    parser.add_argument('--test_folder', type=str, default='/kaggle/input/fer2013/test', help='data directory')
-    parser.add_argument('--batch_size', type=int, default=128, help='batch size')
-    parser.add_argument('--num_workers', type=int, default=2, help='number of workers')
-    parser.add_argument('--num_gpu_used', type=int, default=2, help='number of gpu used')
-    parser.add_argument('--max_epoch', type=int, default=100, help='max epoch')
-    parser.add_argument('--learning_rate', type=float, default=0.01, help='learning rate')
-    parser.add_argument('--num_lr_warm_up_epoch', type=int, default=10, help='number of lr warm up epoch')
-    parser.add_argument('--temperature', type=float, default=3.0, help='temperature')
-    parser.add_argument('--dataset_name', type=str, default='cifar100', help='dataset name')
-    parser.add_argument('--optimize_method', type=str, default='sgd', help='optimize method')
-    parser.add_argument('--scheduler_method', type=str, default='StepLR', help='scheduler method')
-    parser.add_argument('--alpha', type=float, default=0.5, help='alpha')
-    parser.add_argument('--model', type=str, default='resnet18', help='model')
-    parser.add_argument('--checkpoint_dir', type=str, default='checkpoints', help='checkpoint dir')
-    parser.add_argument('--accelerator', type=str, default='gpu', help='accelerator')
-    parser.add_argument('--ckpt_path', type=str, default=None, help='checkpoint path')
-    train(**vars(parser.parse_args()))
+    train()

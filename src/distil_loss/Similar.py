@@ -25,3 +25,10 @@ class Similarity(nn.Module):
         G_diff = G_t - G_s
         loss = (G_diff * G_diff).view(-1, 1).sum(0) / (bsz * bsz)
         return loss
+
+if __name__ == '__main__':
+    y_s = torch.randn(2, 10)
+    y_t = torch.randn(2, 10)
+    loss = Similarity()
+    print(y_s,y_t)
+    print(loss(y_s, y_t))

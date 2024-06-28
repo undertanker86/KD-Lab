@@ -86,8 +86,12 @@ class CustomHead(nn.Module):
 class AdapterResnet1(nn.Module):
     def __init__(self, block, attention, num_classes=100, pool_size=(4,4)):
         super(AdapterResnet1, self).__init__()
-        self.attention = attention
+
         self.expand = [64,128,256,512]
+        if attention is not None:
+            self.attention = attention(self.expand[0])
+        else:
+            self.attention = nn.Identity()
         self.scalenet = nn.Sequential(
             block(self.expand[0], self.expand[1]),
             block(self.expand[1], self.expand[2]),
@@ -108,8 +112,12 @@ class AdapterResnet1(nn.Module):
 class AdapterResnet2(nn.Module):
     def __init__(self, block, attention, num_classes=100, pool_size=(4,4)):
         super(AdapterResnet2, self).__init__()
-        self.attention = attention
+        
         self.expand = [128,256,512]
+        if attention is not None:
+            self.attention = attention(self.expand[0])
+        else:
+            self.attention = nn.Identity()
         self.scalenet = nn.Sequential(
             block(self.expand[0], self.expand[1], stride=2),
             block(self.expand[1], self.expand[2], stride=2),
@@ -130,8 +138,12 @@ class AdapterResnet2(nn.Module):
 class AdapterResnet3(nn.Module):
     def __init__(self, block, attention, num_classes=100, pool_size=(4,4)):
         super(AdapterResnet3, self).__init__()
-        self.attention = attention
+        
         self.expand = [256,512]
+        if attention is not None:
+            self.attention = attention(self.expand[0])
+        else:
+            self.attention = nn.Identity()
         self.scalenet = nn.Sequential(
             block(self.expand[0], self.expand[1], stride=2),
         )

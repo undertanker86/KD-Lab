@@ -11,15 +11,15 @@ class DistilKL(nn.Module):
     def forward(self, y_s:torch.Tensor, y_t:torch.Tensor):
         p_s = F.log_softmax(y_s/self.T, dim=1)
         p_t = F.softmax(y_t/self.T, dim=1)
-        loss = F.kl_div(p_s, p_t, reduction='mean')/y_s.shape[0]
+        loss = F.kl_div(p_s, p_t, reduction='batchmean')/y_s.shape[0]
         return loss
     
     
 class KDLoss(nn.Module):
 
     def __init__(self,
-                 temp=4.0,
-                 alpha=0.5,
+                 temp=3.0,
+                 alpha=0.3,
                  ):
         super(KDLoss, self).__init__()
         self.temp = temp
@@ -27,7 +27,7 @@ class KDLoss(nn.Module):
 
     def forward(self, logit_s, logit_t):
         # N*class
-        S_i = F.softmax(logit_s/self.temp, dim=1)
+        S_i = F.log_softmax(logit_s/self.temp, dim=1)
         T_i = F.softmax(logit_t/self.temp, dim=1)
 
 
