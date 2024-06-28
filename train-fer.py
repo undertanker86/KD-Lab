@@ -118,7 +118,7 @@ class LightningFerModel(L.LightningModule):
 
         self.log("train_loss", loss)
         for i in range(4):
-            self.log(f"train_acc{i+1}", self.__getattr__(f"train_acc{i+1}")(predicted_labels[i], true_labels),on_epoch=True on_step=False, sync_dist=True)
+            self.log(f"train_acc{i+1}", self.__getattr__(f"train_acc{i+1}")(predicted_labels[i], true_labels),on_epoch=True ,on_step=False, sync_dist=True)
 
         return loss
 
@@ -127,13 +127,13 @@ class LightningFerModel(L.LightningModule):
 
         self.log("val_loss", loss, prog_bar=True)
         for i in range(4):
-            self.log(f"val_acc{i+1}", self.__getattr__(f"val_acc{i+1}")(predicted_labels[i], true_labels),on_epoch=True on_step=False, sync_dist=True)
+            self.log(f"val_acc{i+1}", self.__getattr__(f"val_acc{i+1}")(predicted_labels[i], true_labels),on_epoch=True ,on_step=False, sync_dist=True)
         return loss
 
     def test_step(self, batch, batch_idx):
         loss, true_labels, predicted_labels = self._shared_step(batch)
         for i in range(4):
-            self.log(f"test_acc{i+1}", self.__getattr__(f"test_acc{i+1}")(predicted_labels[i], true_labels),on_epoch=True on_step=False, sync_dist=True)
+            self.log(f"test_acc{i+1}", self.__getattr__(f"test_acc{i+1}")(predicted_labels[i], true_labels),on_epoch=True, on_step=False, sync_dist=True)
         return loss
 
     def configure_optimizers(self):
