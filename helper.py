@@ -191,7 +191,7 @@ class Fer2013DataModule(L.LightningDataModule):
         self.test_transform = test_transform
 
     def prepare_data(self):
-        datasets.ImageFolder(root=self.data_path)
+        datasets.ImageFolder(root=self.train_path)
 
         if self.train_transform is None:
             self.train_transform = transforms.Compose(

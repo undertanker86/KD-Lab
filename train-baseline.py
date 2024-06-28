@@ -35,6 +35,7 @@ class LightningFer(L.LightningModule):
         self.val_acc = torchmetrics.Accuracy(task="multiclass",num_classes=num_classes)
         self.test_acc = torchmetrics.Accuracy(task="multiclass",num_classes=num_classes)
         self.save_hyperparameters()
+
     def forward(self, x):
         return self.model(x)
 
@@ -70,7 +71,7 @@ class LightningFer(L.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
         return {
             "optimizer": optimizer,
