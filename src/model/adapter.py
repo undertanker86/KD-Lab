@@ -73,7 +73,6 @@ class SepConv(nn.Module):
 class CustomHead(nn.Module):
     def __init__(self, in_planes, num_classes, pool_size):
         super(CustomHead, self).__init__()
-        nn.SelectiveAdaptiveAvgPool2d(pool_size)
         self.pool = nn.AdaptiveAvgPool2d(pool_size)
         self.fc = nn.Linear(in_planes * pool_size[0] * pool_size[1], num_classes)
 
