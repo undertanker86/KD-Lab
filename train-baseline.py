@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 from lightning.pytorch.loggers import WandbLogger
-from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
+from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 import timm
 import torchmetrics
 from torchvision import datasets, transforms
@@ -28,12 +28,13 @@ class Resnet34Fer(nn.Module):
 class LightningFer(L.LightningModule):
     def __init__(self, model, learning_rate=1e-3,num_classes=7):
         super().__init__()
+        
         self.model = model
         self.learning_rate = learning_rate
         self.train_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
         self.val_acc = torchmetrics.Accuracy(task="multiclass",num_classes=num_classes)
         self.test_acc = torchmetrics.Accuracy(task="multiclass",num_classes=num_classes)
-
+        self.save_hyperparameters()
     def forward(self, x):
         return self.model(x)
 
@@ -96,7 +97,7 @@ def train(dataset_name="fer2013"):
     test_and_val_transform = transforms.Compose([
         transforms.Resize((target_size, target_size)),
         transforms.ToTensor(),
-        transforms.Normalize(mean=IMAGENET_MEAN, std=    IMAGENET_STD)
+        transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
     ])
     if dataset_name == "fer2013":
         
@@ -130,7 +131,9 @@ def train(dataset_name="fer2013"):
         max_epochs=100,
         devices=2,
         strategy="ddp",
-        callbacks=[ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc"), LearningRateMonitor(logging_interval="epoch")],
+        callbacks=[ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc"), 
+        LearningRateMonitor(logging_interval="epoch"),
+        EarlyStopping(monitor="val_acc", patience=3, mode="max")],
         logger=WandbLogger(project="BYOT"),
     )
 
