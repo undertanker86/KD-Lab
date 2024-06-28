@@ -2,7 +2,7 @@ import argparse
 import os
 import sys
 
-import pytorch_lightning as pl
+# import pytorch_lightning as pl
 import lightning as L
 
 import torch

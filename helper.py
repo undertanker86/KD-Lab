@@ -219,7 +219,7 @@ class Fer2013DataModule(L.LightningDataModule):
             root=self.test_path,
             transform=self.test_transform
         )
-        28,709-26,766
+
         self.train, self.valid = random_split(train, lengths=[26766, 1943])
 
     def train_dataloader(self):
@@ -235,6 +235,87 @@ class Fer2013DataModule(L.LightningDataModule):
     def val_dataloader(self):
         valid_loader = DataLoader(
             dataset=self.valid,
+            batch_size=self.batch_size,
+            drop_last=False,
+            shuffle=False,
+            num_workers=self.num_workers,
+        )
+        return valid_loader
+
+    def test_dataloader(self):
+        test_loader = DataLoader(
+            dataset=self.test,
+            batch_size=self.batch_size,
+            drop_last=False,
+            shuffle=False,
+            num_workers=self.num_workers,
+        )
+        return test_loader
+    
+class FerPlusDataModule(L.LightningDataModule):
+    def __init__(
+        self, train_path="./",val_path="./",test_path="./" ,batch_size=64, num_workers=0, height_width=(48, 48),
+        train_transform=None, test_transform=None
+    ):
+        super().__init__()
+        self.batch_size = batch_size
+        self.data_path = train_path
+        self.val_path = val_path
+        self.test_path = test_path
+        self.num_workers = num_workers
+        self.height_width = height_width
+        self.train_transform = train_transform
+        self.test_transform = test_transform
+
+    def prepare_data(self):
+        datasets.ImageFolder(root=self.data_path)
+
+        if self.train_transform is None:
+            self.train_transform = transforms.Compose(
+                [
+                    transforms.Resize(self.height_width),
+                    transforms.ToTensor(),
+                ]
+            )
+
+        if self.test_transform is None:
+            self.test_transform = transforms.Compose(
+                [
+                    transforms.Resize(self.height_width),
+                    transforms.ToTensor(),
+                ]
+            )
+            return None
+        
+    def setup(self, stage=None):
+        self.train = datasets.ImageFolder(
+            root=self.data_path,
+            transform=self.train_transform
+        )
+
+        self.val = datasets.ImageFolder(
+            root=self.val_path,
+            transform=self.test_transform
+        )
+
+        self.test = datasets.ImageFolder(
+            root=self.test_path,
+            transform=self.test_transform
+        )
+
+    def train_dataloader(self):
+        train_loader = DataLoader(
+            dataset=self.train,
+            batch_size=self.batch_size,
+            drop_last=True,
+            shuffle=True,
+            num_workers=self.num_workers,
+        )
+        return train_loader
+
+    def val_dataloader(self):
+        valid_loader = DataLoader(
+            dataset=self.val,
             batch_size=self.batch_size,
             drop_last=False,
             shuffle=False,
