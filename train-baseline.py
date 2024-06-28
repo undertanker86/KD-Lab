@@ -102,8 +102,9 @@ def train(dataset_name="fer2013"):
     if dataset_name == "fer2013":
         
         dm = Fer2013DataModule(
-        data_path="/kaggle/input/fer2013/train",
-        test_path="/kaggle/input/fer2013/test",
+        train_path="/kaggle/input/fer2013/org_fer2013/train",
+        val_path="/kaggle/input/fer2013/org_fer2013/val",
+        test_path="/kaggle/input/fer2013/org_fer2013/test",
         height_width=(target_size, target_size),
         batch_size=256, 
         train_transform=train_transform, 
