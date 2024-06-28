@@ -85,9 +85,6 @@ class LightningFerModel(L.LightningModule):
         self.distil_temp = distil_temp
         self.save_hyperparameters(ignore=["model"])
 
-        self.train_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)  # type: torchmetrics.Accuracy
-        self.val_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)  # type: torchmetrics.Accuracy
-        self.test_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)  # type: torchmetrics.Accuracy
 
         for i in range(4):
             self.__setattr__(f"train_acc{i+1}", torchmetrics.Accuracy(task="multiclass", num_classes=num_classes))  # type: ignore
@@ -210,7 +207,7 @@ def train():
     )
     pytorch_model = FerModel(model_name='resnet18')
     lightning_model = LightningFerModel(model=pytorch_model, learning_rate=0.01, optimizer="adamW", lr_scheduler="cosine_annealingLR", max_epoch=200)
-    callbacks = [ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc"), LearningRateMonitor(logging_interval="epoch")]
+    callbacks = [ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc4"), LearningRateMonitor(logging_interval="epoch")]
 
     trainer = L.Trainer(
         max_epochs=200,
