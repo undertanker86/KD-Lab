@@ -54,9 +54,9 @@ class LightningFerModel(L.LightningModule):
         optimizer: str,
         lr_scheduler: str,
         max_epoch: int,
-        num_classes: int = 7,
-        loss_alpha = 0.3,
-        distil_temp = 3.0
+        num_classes: int = 7,  # type: int
+        loss_alpha: float = 0.3,  # type: float
+        distil_temp: float = 3.0  # type: float
     ) -> None:
         """
         Initialize a LightningFerModel object.
@@ -67,7 +67,9 @@ class LightningFerModel(L.LightningModule):
             optimizer (str): The optimizer to use.
             lr_scheduler (str): The learning rate scheduler to use.
             max_epoch (int): The maximum number of training epochs.
-            num_classes (int): The number of classes for the model. Defaults to 7.
+            num_classes (int, optional): The number of classes for the model. Defaults to 7.
+            loss_alpha (float, optional): The alpha value for the loss function. Defaults to 0.3.
+            distil_temp (float, optional): The temperature value for the distillation loss. Defaults to 3.0.
 
         Returns:
             None
@@ -82,14 +84,14 @@ class LightningFerModel(L.LightningModule):
         self.distil_temp = distil_temp
         self.save_hyperparameters(ignore=["model"])
 
-        self.train_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
-        self.val_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
-        self.test_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
+        self.train_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)  # type: torchmetrics.Accuracy
+        self.val_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)  # type: torchmetrics.Accuracy
+        self.test_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)  # type: torchmetrics.Accuracy
 
         for i in range(4):
-            self.__setattr__(f"train_acc{i+1}", torchmetrics.Accuracy(task="multiclass", num_classes=num_classes))
-            self.__setattr__(f"val_acc{i+1}", torchmetrics.Accuracy(task="multiclass", num_classes=num_classes))
-            self.__setattr__(f"test_acc{i+1}", torchmetrics.Accuracy(task="multiclass", num_classes=num_classes))
+            self.__setattr__(f"train_acc{i+1}", torchmetrics.Accuracy(task="multiclass", num_classes=num_classes))  # type: ignore
+            self.__setattr__(f"val_acc{i+1}", torchmetrics.Accuracy(task="multiclass", num_classes=num_classes))  # type: ignore
+            self.__setattr__(f"test_acc{i+1}", torchmetrics.Accuracy(task="multiclass", num_classes=num_classes))  # type: ignore
         
     def forward(self, x):
         return self.model(x)
@@ -205,7 +207,7 @@ def train():
         num_workers=4
     )
     pytorch_model = FerModel(model_name='resnet18')
-    lightning_model = LightningFerModel(model=pytorch_model, learning_rate=0.01, optimizer="SGD", lr_scheduler="cosine_annealingLR", max_epoch=200)
+    lightning_model = LightningFerModel(model=pytorch_model, learning_rate=0.01, optimizer="adamW", lr_scheduler="cosine_annealingLR", max_epoch=200)
     callbacks = [ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc"), LearningRateMonitor(logging_interval="epoch")]
 
     trainer = L.Trainer(
