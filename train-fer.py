@@ -183,8 +183,8 @@ ImageNetSTD = [0.229, 0.224, 0.225]
 def train():
     train_transform = transforms.Compose(
         [
-            transforms.Resize(32),
-            transforms.CenterCrop(32),
+            transforms.Resize(48),
+            transforms.CenterCrop(48),
             transforms.RandomHorizontalFlip(),
             # transforms.RandomApply([transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
             transforms.TrivialAugmentWide(),
@@ -195,7 +195,7 @@ def train():
     )
     test_transform = transforms.Compose(
         [
-            transforms.Resize(32),
+            transforms.Resize(48),
             transforms.ToTensor(),
             transforms.Normalize(ImageNetMEAN, ImageNetSTD),
         ]
@@ -204,7 +204,7 @@ def train():
     dm = Fer2013DataModule(
         data_path="/kaggle/input/fer2013/train",
         test_path="/kaggle/input/fer2013/test",
-        height_width=(32, 32),
+        height_width=(32,32),
         batch_size=256, 
         train_transform=train_transform, 
         test_transform=test_transform,
