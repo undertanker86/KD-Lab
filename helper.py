@@ -219,8 +219,8 @@ class Fer2013DataModule(L.LightningDataModule):
             root=self.test_path,
             transform=self.test_transform
         )
-
-        self.train, self.valid = random_split(train, lengths=[28709, 3589])
+        28,709-26,766
+        self.train, self.valid = random_split(train, lengths=[26766, 1943])
 
     def train_dataloader(self):
         train_loader = DataLoader(
