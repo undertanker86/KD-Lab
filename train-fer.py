@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 from lightning.pytorch.loggers import WandbLogger
-from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
 import timm
 import torchmetrics
 from torchvision import datasets, transforms
@@ -206,7 +206,7 @@ def train():
     )
     pytorch_model = FerModel(model_name='resnet18')
     lightning_model = LightningFerModel(model=pytorch_model, learning_rate=0.01, optimizer="SGD", lr_scheduler="cosine_annealingLR", max_epoch=200)
-    callbacks = [ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc"), LearningRateMonitor(logging_interval="step")]
+    callbacks = [ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc"), LearningRateMonitor(logging_interval="epoch")]
 
     trainer = L.Trainer(
         max_epochs=200,
