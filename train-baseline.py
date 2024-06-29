@@ -14,10 +14,10 @@ import argparse
 from helper import Fer2013DataModule, FerPlusDataModule
 
 class Resnet34Fer(nn.Module):
-    def __init__(self, pretrained=True, num_classes=7):
+    def __init__(self, pretrained=False, num_classes=7):
         super().__init__()
         self.resnet = timm.create_model('resnet34', pretrained=pretrained, num_classes=num_classes)
-        self.resnet.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        self.resnet.conv1 = nn.Conv2d(1, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
         self.resnet.maxpool = nn.Identity()
         self.resnet.fc = nn.Linear(512, num_classes)
 
@@ -26,7 +26,7 @@ class Resnet34Fer(nn.Module):
     
 
 class LightningFer(L.LightningModule):
-    def __init__(self, model, learning_rate=1e-3,num_classes=7):
+    def __init__(self, model, learning_rate=1e-3,num_classes=7,label_smoothing=0.1):
         super().__init__()
         
         self.model = model
@@ -34,6 +34,7 @@ class LightningFer(L.LightningModule):
         self.train_acc = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
         self.val_acc = torchmetrics.Accuracy(task="multiclass",num_classes=num_classes)
         self.test_acc = torchmetrics.Accuracy(task="multiclass",num_classes=num_classes)
+        self.label_smoothing = label_smoothing
         self.save_hyperparameters()
 
     def forward(self, x):
@@ -42,7 +43,7 @@ class LightningFer(L.LightningModule):
     def _shared_step(self, batch, batch_idx):
         features, true_labels = batch
         logits = self.forward(features)
-        loss = F.cross_entropy(logits, true_labels)
+        loss = F.cross_entropy(logits, true_labels,label_smoothing=self.label_smoothing)
         predicted_labels = torch.argmax(logits, dim=1)
         return loss, true_labels, predicted_labels
 
@@ -71,8 +72,8 @@ class LightningFer(L.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
+        optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0.9 , weight_decay=1e-4, nesterov=True)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max',factor=0.75,patience=5, verbose=True)
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
@@ -85,20 +86,52 @@ def train(dataset_name="fer2013"):
     # Training settings
     IMAGENET_MEAN = [0.485, 0.456, 0.406]
     IMAGENET_STD = [0.229, 0.224, 0.225]
+    GRAY_MEAN = 0
+    GRAY_STD = 255
     target_size = 48
     num_classes = 7
+    # v1 agumentations
+    # train_transform = transforms.Compose([
+    #     transforms.RandomResizedCrop(target_size, scale=(0.8, 1.2)),
+    #     transforms.RandomApply([transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
+    #     transforms.RandomHorizontalFlip(),
+    #     transforms.RandomApply([transforms.RandomRotation(10)], p=0.5),
+    #     transforms.ToTensor(),
+    #     transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
+    # ])
+    # test_and_val_transform = transforms.Compose([
+    #     transforms.Resize((target_size, target_size)),
+    #     transforms.ToTensor(),
+    #     transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
+    # ])
+    ##############################################################3
+    # v2 agumentations
     train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(target_size, scale=(0.8, 1.2)),
-        transforms.RandomApply([transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomApply([transforms.RandomRotation(10)], p=0.5),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
+            transforms.Grayscale(),
+            transforms.RandomResizedCrop(48, scale=(0.8, 1.2)),
+            transforms.RandomApply([transforms.ColorJitter(
+                brightness=0.5, contrast=0.5, saturation=0.5)], p=0.5),
+            transforms.RandomApply(
+                [transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomApply([transforms.RandomRotation(10)], p=0.5),
+            transforms.FiveCrop(40),
+            transforms.Lambda(lambda crops: torch.stack(
+                [transforms.ToTensor()(crop) for crop in crops])),
+            transforms.Lambda(lambda tensors: torch.stack(
+                [transforms.Normalize(mean=(GRAY_MEAN,), std=(GRAY_STD,))(t) for t in tensors])),
+            transforms.Lambda(lambda tensors: torch.stack(
+                [transforms.RandomErasing()(t) for t in tensors])),
     ])
+
     test_and_val_transform = transforms.Compose([
+        transforms.Grayscale(),
         transforms.Resize((target_size, target_size)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
+        transforms.FiveCrop(40),
+        transforms.Lambda(lambda crops: torch.stack(
+            [transforms.ToTensor()(crop) for crop in crops])),
+        transforms.Lambda(lambda tensors: torch.stack(
+            [transforms.Normalize(mean=(GRAY_MEAN,), std=(GRAY_STD,))(t) for t in tensors])),
     ])
     if dataset_name == "fer2013":
         
