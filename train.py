@@ -62,34 +62,24 @@ if __name__ == '__main__':
     import torch.nn as nn
     import timm
 
-    class CustomHead(nn.Module):
-        def __init__(self, num_features, num_classes, pool_size):
-            super(CustomHead, self).__init__()
-            self.pool = nn.AdaptiveAvgPool2d(pool_size)
-            self.fc = nn.Linear(num_features * pool_size[0] * pool_size[1], num_classes)
+    class Resnet34Fer(nn.Module):
+        def __init__(self, model_name,pretrained=False, num_classes=7):
+            super().__init__()
+            self.resnet = timm.create_model(model_name, pretrained=pretrained, num_classes=num_classes)
+            self.resnet.conv1 = nn.Conv2d(1, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            self.resnet.maxpool = nn.Identity()
+            self.resnet.fc = nn.Linear(512, num_classes)
 
         def forward(self, x):
-            x = self.pool(x)
-            x = x.view(x.size(0), -1)
-            print(x.shape)
-            # x = x.reshape(x.size(0), 1000 * 224 * 224)
-            x = self.fc(x)
-            return x
+            return self.resnet(x)
 
     # Load pre-trained model
-    model = timm.create_model('resnet18',features_only=True)
-    model.eval()
-    x = torch.randn(1, 3, 32, 32)
-    y = model(x)
-    for i in y:
-        print(i.shape)
-    
-    # Define custom head with desired pool size
-    custom_head = CustomHead(y[-1].shape[1], 1000, (4, 4))  # Replace 1000 with your num_classes
-    out = custom_head(y[-1])
-    print(out.shape)
+    model = Resnet34Fer("resnet18", pretrained=False, num_classes=7)
     # # Replace final layers with custom head
     # model.global_pool = custom_head.pool
     # model.fc = custom_head.fc
+    x = torch.randn(1, 1, 48, 48)
+    out = model(x)
+    print(out.shape)
 
 # Use the modified model for training or inference

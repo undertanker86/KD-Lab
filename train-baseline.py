@@ -14,9 +14,9 @@ import argparse
 from helper import Fer2013DataModule, FerPlusDataModule
 
 class Resnet34Fer(nn.Module):
-    def __init__(self, pretrained=False, num_classes=7):
+    def __init__(self, model_name,pretrained=False, num_classes=7):
         super().__init__()
-        self.resnet = timm.create_model('resnet34', pretrained=pretrained, num_classes=num_classes)
+        self.resnet = timm.create_model(model_name, pretrained=pretrained, num_classes=num_classes)
         self.resnet.conv1 = nn.Conv2d(1, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
         self.resnet.maxpool = nn.Identity()
         self.resnet.fc = nn.Linear(512, num_classes)
@@ -82,7 +82,7 @@ class LightningFer(L.LightningModule):
             },
         }
     
-def train(dataset_name="fer2013"):
+def train(model_name="resnet18",dataset_name="fer2013"):
     # Training settings
     IMAGENET_MEAN = [0.485, 0.456, 0.406]
     IMAGENET_STD = [0.229, 0.224, 0.225]
@@ -159,7 +159,7 @@ def train(dataset_name="fer2013"):
         )
     
     
-    model = Resnet34Fer(pretrained=False, num_classes=num_classes)
+    model = Resnet34Fer(model_name=model_name,pretrained=False, num_classes=num_classes)
     lightning_model = LightningFer(model=model, learning_rate=0.01,num_classes=num_classes)
 
     trainer = L.Trainer(
@@ -179,5 +179,6 @@ def train(dataset_name="fer2013"):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='BYOT')
     parser.add_argument('--dataset', type=str, default="fer2013")
+    parser.add_argument('--model', type=str, default="resnet18")
     args = parser.parse_args()
     train(args.dataset)
