@@ -181,4 +181,4 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default="fer2013")
     parser.add_argument('--model', type=str, default="resnet18")
     args = parser.parse_args()
-    train(args.dataset)
+    train(args.model,args.dataset)
