@@ -115,23 +115,16 @@ def train(model_name="resnet18",dataset_name="fer2013"):
                 [transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
             transforms.RandomHorizontalFlip(),
             transforms.RandomApply([transforms.RandomRotation(10)], p=0.5),
-            transforms.FiveCrop(40),
-            transforms.Lambda(lambda crops: torch.stack(
-                [transforms.ToTensor()(crop) for crop in crops])),
-            transforms.Lambda(lambda tensors: torch.stack(
-                [transforms.Normalize(mean=(GRAY_MEAN,), std=(GRAY_STD,))(t) for t in tensors])),
-            transforms.Lambda(lambda tensors: torch.stack(
-                [transforms.RandomErasing()(t) for t in tensors])),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(GRAY_MEAN,), std=(GRAY_STD,)),
+            transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3), value=0, inplace=False),
     ])
 
     test_and_val_transform = transforms.Compose([
         transforms.Grayscale(),
         transforms.Resize((target_size, target_size)),
-        transforms.FiveCrop(40),
-        transforms.Lambda(lambda crops: torch.stack(
-            [transforms.ToTensor()(crop) for crop in crops])),
-        transforms.Lambda(lambda tensors: torch.stack(
-            [transforms.Normalize(mean=(GRAY_MEAN,), std=(GRAY_STD,))(t) for t in tensors])),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=(GRAY_MEAN,), std=(GRAY_STD,)),
     ])
     if dataset_name == "fer2013":
         
