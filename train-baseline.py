@@ -149,7 +149,7 @@ def train(model_name="resnet18",dataset_name="fer2013"):
     
     
     # model = Resnet34Fer(model_name=model_name,pretrained=False, num_classes=num_classes)
-    model = FGW(in_channels=1, num_classes=num_classes)
+    model = FGW(in_channels=3, num_classes=num_classes)
     lightning_model = LightningFer(model=model, learning_rate=0.01,num_classes=num_classes)
 
     trainer = L.Trainer(
