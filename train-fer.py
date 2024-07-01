@@ -97,7 +97,7 @@ class LightningFerModel(L.LightningModule):
     def _shared_step(self, batch):
         features, true_labels = batch
         logits, fea = self(features)
-        loss = 0
+        loss = F.cross_entropy(logits[3], true_labels)
         predicted_labels = []
         for i in range(3):
             loss += F.cross_entropy(logits[i], true_labels)* (1-self.loss_alpha)
@@ -105,7 +105,7 @@ class LightningFerModel(L.LightningModule):
             loss += kd_loss
 
             predicted_labels.append(torch.argmax(logits[i], dim=1))
-        loss += F.cross_entropy(logits[3], true_labels)
+        
         predicted_labels.append(torch.argmax(logits[3], dim=1))
         # loss = F.cross_entropy(logits, true_labels)
         # predicted_labels = torch.argmax(logits, dim=1)

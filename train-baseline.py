@@ -156,9 +156,9 @@ def train(model_name="resnet18",dataset_name="fer2013"):
         max_epochs=100,
         devices=2,
         strategy="ddp",
-        callbacks=[ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc"), 
+        callbacks=[ModelCheckpoint(save_top_k=1, mode="max", monitor="loss"), 
         LearningRateMonitor(logging_interval="epoch"),
-        EarlyStopping(monitor="val_acc", patience=3, mode="max")],
+        EarlyStopping(monitor="loss", patience=3, mode="max")],
         logger=WandbLogger(project="BYOT"),
     )
 
