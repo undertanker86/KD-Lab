@@ -107,18 +107,14 @@ def train(model_name="resnet18",dataset_name="fer2013"):
     ##############################################################3
     # v2 agumentations
     train_transform = transforms.Compose([
-            transforms.Grayscale(),
-            transforms.RandomResizedCrop(48, scale=(0.8, 1.2)),
-            transforms.RandomApply([transforms.ColorJitter(
-                brightness=0.5, contrast=0.5, saturation=0.5)], p=0.5),
-            transforms.RandomApply(
-                [transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomApply([transforms.RandomRotation(10)], p=0.5),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=(GRAY_MEAN,), std=(GRAY_STD,)),
-            transforms.RandomErasing(p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3), value=0, inplace=False),
-    ])
+                    transforms.Grayscale(),
+                    transforms.RandomResizedCrop(target_size, scale=(0.8, 1.2)),
+                    transforms.RandomApply([transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.RandomApply([transforms.RandomRotation(10)], p=0.5),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean=GRAY_MEAN, std=GRAY_STD)
+                ])
 
     test_and_val_transform = transforms.Compose([
         transforms.Grayscale(),

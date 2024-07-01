@@ -16,7 +16,7 @@ from torchvision import datasets, transforms
 from torchvision.transforms import v2 as v2_transforms
 
 from src.distil_loss import DistilKL, Similarity, KDLoss
-from src.model import AdapterResnet1, AdapterResnet2 ,AdapterResnet3, SepConv, CustomHead
+from src.model import AdapterResnet1, AdapterResnet2 ,AdapterResnet3, SepConv, CustomHead, Block
 from src.customblock import CBAM
 from helper import Fer2013DataModule
 
@@ -179,7 +179,6 @@ def train():
     train_transform = transforms.Compose(
         [
             transforms.Resize(48),
-            transforms.CenterCrop(48),
             transforms.RandomHorizontalFlip(),
             # transforms.RandomApply([transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
             transforms.TrivialAugmentWide(),

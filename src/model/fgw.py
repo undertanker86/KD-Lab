@@ -193,6 +193,7 @@ class FGW(nn.Module):
 
     def forward(self, x):
         # Initial convolutions
+        
         out = self.conv1(x)
         #print("After conv1", out.size())
         out = self.conv2(out)
@@ -210,6 +211,7 @@ class FGW(nn.Module):
 
         # Final convolution and pooling
         out = self.last_conv(out)
+
         #print("After last_conv", out.size())
         out = self.avgp(out)
         #print("After avgp", out.size())
