@@ -73,7 +73,7 @@ class LightningFer(L.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0.9 , weight_decay=1e-4, nesterov=True)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max',factor=0.75,patience=5, verbose=True)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max',factor=0.5,patience=3, verbose=True)
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
