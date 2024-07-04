@@ -226,7 +226,7 @@ class Fer2013DataModule(L.LightningDataModule):
             transform=self.train_transform
             )
         else:
-            self.train, self.valid = random_split(self.test, lengths=[, ])
+            self.train, self.valid = random_split(self.test, lengths=[27310,3410])
 
 
 
