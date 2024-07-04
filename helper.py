@@ -177,7 +177,7 @@ class Cifar100DataModule(L.LightningDataModule):
 
 class Fer2013DataModule(L.LightningDataModule):
     def __init__(
-        self, train_path="./",val_path="./",test_path="./", batch_size=64, num_workers=0, height_width=(48, 48),
+        self, train_path="./",val_path=None,test_path="./", batch_size=64, num_workers=0, height_width=(48, 48),
         train_transform=None, test_transform=None
     ):
         super().__init__()
@@ -211,21 +211,26 @@ class Fer2013DataModule(L.LightningDataModule):
             return None
         
     def setup(self, stage=None):
-        self.train = datasets.ImageFolder(
-            root=self.train_path,
-            transform=self.train_transform
-        )
-
-        self.valid = datasets.ImageFolder(
-            root=self.val_path,
-            transform=self.test_transform
-        )
-
         self.test = datasets.ImageFolder(
             root=self.test_path,
             transform=self.test_transform
         )
 
+        if self.val_path is not None:
+            self.valid = datasets.ImageFolder(
+                root=self.val_path,
+                transform=self.test_transform
+            )
+            self.train = datasets.ImageFolder(
+            root=self.train_path,
+            transform=self.train_transform
+            )
+        else:
+            self.train, self.valid = random_split(self.test, lengths=[, ])
+
+
+
+        
 
 
     def train_dataloader(self):
