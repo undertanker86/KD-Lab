@@ -35,7 +35,7 @@ class LightningFer(L.LightningModule):
         self.val_acc = torchmetrics.Accuracy(task="multiclass",num_classes=num_classes)
         self.test_acc = torchmetrics.Accuracy(task="multiclass",num_classes=num_classes)
         self.label_smoothing = label_smoothing
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=['model'])
 
     def forward(self, x):
         return self.model(x)
@@ -82,7 +82,7 @@ class LightningFer(L.LightningModule):
             },
         }
     
-def train(model_name="resnet18",dataset_name="fer2013"):
+def train(model_name="resnet18",dataset_name="fer2013",batch_size=128,learning_rate=1e-3,num_epochs=100):
     # Training settings
     dropout = 0.5
     IMAGENET_MEAN = [0.485, 0.456, 0.406]
@@ -90,6 +90,7 @@ def train(model_name="resnet18",dataset_name="fer2013"):
     GRAY_MEAN = 0
     GRAY_STD = 255
     target_size = 48
+    crop_size = 32
     num_classes = 7
     ###########################################################
     # v1 agumentations from Hung
@@ -131,9 +132,9 @@ def train(model_name="resnet18",dataset_name="fer2013"):
             transforms.RandomHorizontalFlip(),
             transforms.RandomVerticalFlip(),
             transforms.Grayscale(),
-            transforms.Resize(236),
+            transforms.Resize(target_size),
             transforms.RandomRotation(degrees=20),
-            transforms.RandomCrop(224),
+            transforms.RandomCrop(crop_size),
             transforms.ToTensor(),
             transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
         ]
@@ -141,8 +142,8 @@ def train(model_name="resnet18",dataset_name="fer2013"):
     val_transform = transforms.Compose(
         [
             transforms.Grayscale(),
-            transforms.Resize(236),
-            transforms.RandomCrop(224),
+            transforms.Resize(target_size),
+            transforms.RandomCrop(crop_size),
             transforms.ToTensor(),
             transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
         ]
@@ -151,8 +152,8 @@ def train(model_name="resnet18",dataset_name="fer2013"):
     test_transform = transforms.Compose(
         [
             transforms.Grayscale(),
-            transforms.Resize(236),
-            transforms.TenCrop(224),
+            transforms.Resize(target_size),
+            transforms.TenCrop(crop_size),
             transforms.Lambda(
                 lambda crops: torch.stack(
                     [transforms.ToTensor()(crop) for crop in crops]
@@ -170,7 +171,7 @@ def train(model_name="resnet18",dataset_name="fer2013"):
         val_path="/kaggle/input/fer2013/org_fer2013/val",
         test_path="/kaggle/input/fer2013/org_fer2013/test",
         height_width=(target_size, target_size),
-        batch_size=256, 
+        batch_size=128, 
         train_transform=train_transform, 
         test_transform=val_transform,
         num_workers=4
@@ -182,7 +183,7 @@ def train(model_name="resnet18",dataset_name="fer2013"):
         val_path="/kaggle/input/fer-plus/fer_plus/val",
         test_path="/kaggle/input/fer-plus/fer_plus/test",
         height_width=(target_size, target_size),
-        batch_size=256, 
+        batch_size=128, 
         train_transform=train_transform, 
         test_transform=val_transform,
         num_workers=4
@@ -193,6 +194,8 @@ def train(model_name="resnet18",dataset_name="fer2013"):
     logger.log_metrics({"model": model_name})
     logger.log_metrics({"dropout":dropout })
     logger.log_metrics({"optimizer": "AdamW", "lr_scheduler": "cosine_warmup_anneal"})
+    logger.log_metrics({"batch_size": batch_size})
+    logger.log_metrics({"resize": target_size,"crop": crop_size})
     # model = Resnet34Fer(model_name=model_name,pretrained=False, num_classes=num_classes)
     model = FGWLinear(in_channels=3, num_classes=num_classes,dropout=dropout)
     lightning_model = LightningFer(model=model, learning_rate=0.001,num_classes=num_classes)
@@ -204,7 +207,7 @@ def train(model_name="resnet18",dataset_name="fer2013"):
         callbacks=[ModelCheckpoint(save_top_k=1, mode="min", monitor="val_loss"), 
         LearningRateMonitor(logging_interval="epoch"),
         EarlyStopping(monitor="val_loss", patience=7, mode="min")],
-        logger=WandbLogger(project="BYOT"),
+        logger=logger,
     )
 
     trainer.fit(lightning_model, dm)
@@ -215,5 +218,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='BYOT')
     parser.add_argument('--dataset', type=str, default="fer2013")
     parser.add_argument('--model', type=str, default="resnet18")
+    parser.add_argument('--dropout', type=float, default=0.5)
+
     args = parser.parse_args()
     train(args.model,args.dataset)

@@ -262,7 +262,7 @@ class FGWLinear(nn.Module):
         return out
 
 if __name__ == "__main__":
-    model = FGWLinear(3, 10)
-    x = torch.randn(1, 3, 224, 224)
+    model = FGWLinear(3, 10).to("cuda")
+    x = torch.randn(1, 3, 224, 224).to("cuda")
     y = model(x)
     print(y.shape)
