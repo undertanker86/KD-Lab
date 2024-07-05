@@ -8,7 +8,7 @@ import timm
 import torchmetrics
 from torchvision import datasets, transforms
 # from torchvision.transforms import v2 as v2_transforms
-from src.model import FGW
+from src.model import FGW, FGWLinear
 import argparse
 # import os
 from helper import Fer2013DataModule, FerPlusDataModule
@@ -84,26 +84,28 @@ class LightningFer(L.LightningModule):
     
 def train(model_name="resnet18",dataset_name="fer2013"):
     # Training settings
+    dropout = 0.5
     IMAGENET_MEAN = [0.485, 0.456, 0.406]
     IMAGENET_STD = [0.229, 0.224, 0.225]
     GRAY_MEAN = 0
     GRAY_STD = 255
     target_size = 48
     num_classes = 7
-    # v1 agumentations
-    train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(target_size, scale=(0.8, 1.2)),
-        transforms.RandomApply([transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomApply([transforms.RandomRotation(10)], p=0.5),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
-    ])
-    test_and_val_transform = transforms.Compose([
-        transforms.Resize((target_size, target_size)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
-    ])
+    ###########################################################
+    # v1 agumentations from Hung
+    # train_transform = transforms.Compose([
+    #     transforms.RandomResizedCrop(target_size, scale=(0.8, 1.2)),
+    #     transforms.RandomApply([transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
+    #     transforms.RandomHorizontalFlip(),
+    #     transforms.RandomApply([transforms.RandomRotation(10)], p=0.5),
+    #     transforms.ToTensor(),
+    #     transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
+    # ])
+    # test_and_val_transform = transforms.Compose([
+    #     transforms.Resize((target_size, target_size)),
+    #     transforms.ToTensor(),
+    #     transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
+    # ])
     #############################################################3
     # v2 agumentations
     # train_transform = transforms.Compose([
@@ -122,6 +124,45 @@ def train(model_name="resnet18",dataset_name="fer2013"):
     #     transforms.ToTensor(),
     #     transforms.Normalize(mean=(GRAY_MEAN,), std=(GRAY_STD,)),
     # ])
+    ####################################################################2
+    # EmoNeXt agumentations
+    train_transform = transforms.Compose(
+        [
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),
+            transforms.Grayscale(),
+            transforms.Resize(236),
+            transforms.RandomRotation(degrees=20),
+            transforms.RandomCrop(224),
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+        ]
+    )
+    val_transform = transforms.Compose(
+        [
+            transforms.Grayscale(),
+            transforms.Resize(236),
+            transforms.RandomCrop(224),
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+        ]
+    )
+
+    test_transform = transforms.Compose(
+        [
+            transforms.Grayscale(),
+            transforms.Resize(236),
+            transforms.TenCrop(224),
+            transforms.Lambda(
+                lambda crops: torch.stack(
+                    [transforms.ToTensor()(crop) for crop in crops]
+                )
+            ),
+            transforms.Lambda(
+                lambda crops: torch.stack([crop.repeat(3, 1, 1) for crop in crops])
+            ),
+        ]
+    )
     if dataset_name == "fer2013":
         
         dm = Fer2013DataModule(
@@ -131,7 +172,7 @@ def train(model_name="resnet18",dataset_name="fer2013"):
         height_width=(target_size, target_size),
         batch_size=256, 
         train_transform=train_transform, 
-        test_transform=test_and_val_transform,
+        test_transform=val_transform,
         num_workers=4
         )
     elif dataset_name == "ferplus":
@@ -143,13 +184,17 @@ def train(model_name="resnet18",dataset_name="fer2013"):
         height_width=(target_size, target_size),
         batch_size=256, 
         train_transform=train_transform, 
-        test_transform=test_and_val_transform,
+        test_transform=val_transform,
         num_workers=4
         )
     
-    
+    logger = WandbLogger(project="BYOT")
+    logger.log_metrics({"dataset": dataset_name})
+    logger.log_metrics({"model": model_name})
+    logger.log_metrics({"dropout":dropout })
+    logger.log_metrics({"optimizer": "AdamW", "lr_scheduler": "cosine_warmup_anneal"})
     # model = Resnet34Fer(model_name=model_name,pretrained=False, num_classes=num_classes)
-    model = FGW(in_channels=3, num_classes=num_classes)
+    model = FGWLinear(in_channels=3, num_classes=num_classes,dropout=dropout)
     lightning_model = LightningFer(model=model, learning_rate=0.001,num_classes=num_classes)
 
     trainer = L.Trainer(

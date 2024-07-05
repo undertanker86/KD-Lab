@@ -220,7 +220,7 @@ class FGW(nn.Module):
         return out
 
 class FGWLinear(nn.Module):
-    def __init__(self, in_channels, num_classes):
+    def __init__(self, in_channels, num_classes,dropout=0.5):
         super(FGWLinear, self).__init__()
         self.relu = nn.ReLU(inplace=True)
         self.conv1 = conv3x3(in_channels, 8)
@@ -236,7 +236,7 @@ class FGWLinear(nn.Module):
         self.block4 = Block(64, 128, keep_dim=False)
 
         # self.last_conv = nn.Conv2d(128, num_classes, kernel_size=1, stride=1, padding=0)
-
+        self.dropout = nn.Dropout(dropout)
         self.classifier = nn.Linear(num_classes, num_classes)
 
     def forward(self, x):
@@ -254,7 +254,7 @@ class FGWLinear(nn.Module):
         # Final convolution and pooling
         # out = self.last_conv(out)
         out = self.avgp(out)
-
+        out = self.dropout(out)
         out = out.view((out.shape[0], -1))
         out = self.classifier(out)
         return out
