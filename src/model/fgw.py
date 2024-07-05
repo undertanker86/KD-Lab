@@ -219,6 +219,45 @@ class FGW(nn.Module):
 
         return out
 
+class FGWLinear(nn.Module):
+    def __init__(self, in_channels, num_classes):
+        super(FGWLinear, self).__init__()
+        self.relu = nn.ReLU(inplace=True)
+        self.conv1 = conv3x3(in_channels, 8)
+        self.conv2 = conv3x3(8, 8)
+        self.cbam = CBAM(8,8)
+
+        self.block1 = Block(8, 16, keep_dim=True)
+
+        self.block2 = Block(16, 32, keep_dim=True)
+
+        self.block3 = Block(32, 64, keep_dim=False)
+
+        self.block4 = Block(64, 128, keep_dim=False)
+
+        # self.last_conv = nn.Conv2d(128, num_classes, kernel_size=1, stride=1, padding=0)
+
+        self.classifier = nn.Linear(num_classes, num_classes)
+
+    def forward(self, x):
+        # Initial convolutions
+        out = self.conv1(x)
+        out = self.conv2(out)
+        out = self.cbam(out)
+
+        # Block processing
+        out = self.block1(out)
+        out = self.block2(out)
+        out = self.block3(out)
+        out = self.block4(out)
+
+        # Final convolution and pooling
+        # out = self.last_conv(out)
+        out = self.avgp(out)
+
+        out = out.view((out.shape[0], -1))
+        out = self.classifier(out)
+        return out
 
 if __name__ == "__main__":
     import time
