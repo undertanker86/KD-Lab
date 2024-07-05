@@ -237,7 +237,7 @@ class FGWLinear(nn.Module):
         self.avgp = nn.AdaptiveAvgPool2d((1, 1))
         # self.last_conv = nn.Conv2d(128, num_classes, kernel_size=1, stride=1, padding=0)
         self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(num_classes, num_classes)
+        self.classifier = nn.Linear(128, num_classes)
 
     def forward(self, x):
         # Initial convolutions
@@ -254,19 +254,15 @@ class FGWLinear(nn.Module):
         # Final convolution and pooling
         # out = self.last_conv(out)
         out = self.avgp(out)
+        
         out = self.dropout(out)
         out = out.view((out.shape[0], -1))
+  
         out = self.classifier(out)
         return out
 
 if __name__ == "__main__":
-    import time
-    # import numpy as np
-    model = FGW(64, 100)
-    print('total params: ', sum(p.numel() for p in model.parameters() if p.requires_grad))
-    model.eval()
-    x = torch.rand(128, 64, 32, 32)
-    t0 = time.time()
-    out = model(x)
-    t = time.time() - t0
-    print('time 1 batch: ', t)
+    model = FGWLinear(3, 10)
+    x = torch.randn(1, 3, 224, 224)
+    y = model(x)
+    print(y.shape)
