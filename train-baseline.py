@@ -26,7 +26,7 @@ class Resnet34Fer(nn.Module):
     
 
 class LightningFer(L.LightningModule):
-    def __init__(self, model, learning_rate=1e-3,num_classes=7,label_smoothing=0.1):
+    def __init__(self, model, learning_rate=1e-3,num_classes=7,label_smoothing=0.1,other_hyperparameters={},):
         super().__init__()
         
         self.model = model
@@ -35,6 +35,7 @@ class LightningFer(L.LightningModule):
         self.val_acc = torchmetrics.Accuracy(task="multiclass",num_classes=num_classes)
         self.test_acc = torchmetrics.Accuracy(task="multiclass",num_classes=num_classes)
         self.label_smoothing = label_smoothing
+        self.other_hyperparameters = other_hyperparameters
         self.save_hyperparameters(ignore=['model'])
 
     def forward(self, x):
@@ -82,7 +83,7 @@ class LightningFer(L.LightningModule):
             },
         }
     
-def train(model_name="resnet18",dataset_name="fer2013",batch_size=128,learning_rate=1e-3,num_epochs=100):
+def train(model_name="resnet18",dataset_name="fer2013",batch_size=128,target_size=48,crop_size=32):
     # Training settings
     dropout = 0.5
     IMAGENET_MEAN = [0.485, 0.456, 0.406]
@@ -190,14 +191,18 @@ def train(model_name="resnet18",dataset_name="fer2013",batch_size=128,learning_r
         )
     
     logger = WandbLogger(project="BYOT")
-    logger.log_metrics({"dataset": dataset_name})
-    logger.log_metrics({"model": model_name})
-    logger.log_metrics({"dropout":dropout })
-    logger.log_metrics({"optimizer": "AdamW", "lr_scheduler": "cosine_warmup_anneal"})
-    logger.log_metrics({"batch_size": batch_size})
-    logger.log_metrics({"resize": target_size,"crop": crop_size})
+    hyper_params = {
+        "learning_rate": 0.001,
+        "batch_size": batch_size,
+        "num_classes": num_classes,
+        "target_size": target_size,
+        "crop_size": crop_size,
+        "model_name": model_name,
+        "optimizer": "SGD",
+        "lr_scheduler": "ReduceLROnPlateau",
+    }
     # model = Resnet34Fer(model_name=model_name,pretrained=False, num_classes=num_classes)
-    model = FGWLinear(in_channels=3, num_classes=num_classes,dropout=dropout)
+    model = FGW(in_channels=3, num_classes=num_classes)
     lightning_model = LightningFer(model=model, learning_rate=0.001,num_classes=num_classes)
 
     trainer = L.Trainer(
@@ -218,9 +223,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='BYOT')
     parser.add_argument('--dataset', type=str, default="fer2013")
     parser.add_argument('--model', type=str, default="resnet18")
-    
-
     parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--target_size', type=int, default=236)
+    parser.add_argument('--crop_size', type=int, default=224)
     args = parser.parse_args()
     train(args.model,args.dataset,args.batch_size)
