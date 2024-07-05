@@ -171,7 +171,7 @@ def train(model_name="resnet18",dataset_name="fer2013",batch_size=128,learning_r
         val_path="/kaggle/input/fer2013/org_fer2013/val",
         test_path="/kaggle/input/fer2013/org_fer2013/test",
         height_width=(target_size, target_size),
-        batch_size=128, 
+        batch_size=batch_size, 
         train_transform=train_transform, 
         test_transform=val_transform,
         num_workers=4
@@ -183,7 +183,7 @@ def train(model_name="resnet18",dataset_name="fer2013",batch_size=128,learning_r
         val_path="/kaggle/input/fer-plus/fer_plus/val",
         test_path="/kaggle/input/fer-plus/fer_plus/test",
         height_width=(target_size, target_size),
-        batch_size=128, 
+        batch_size=batch_size, 
         train_transform=train_transform, 
         test_transform=val_transform,
         num_workers=4
@@ -218,7 +218,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='BYOT')
     parser.add_argument('--dataset', type=str, default="fer2013")
     parser.add_argument('--model', type=str, default="resnet18")
-    parser.add_argument('--dropout', type=float, default=0.5)
+    
 
+    parser.add_argument('--batch_size', type=int, default=256)
+    parser.add_argument('--lr', type=float, default=0.001)
     args = parser.parse_args()
-    train(args.model,args.dataset)
+    train(args.model,args.dataset,args.batch_size)
