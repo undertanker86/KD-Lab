@@ -18,22 +18,22 @@ from torchvision.transforms import v2 as v2_transforms
 from src.distil_loss import DistilKL, Similarity, KDLoss
 from src.model import AdapterResnet1, AdapterResnet2 ,AdapterResnet3, SepConv, CustomHead, Block
 from src.customblock import CBAM
-from helper import Fer2013DataModule
+from helper import Fer2013DataModule , Cifar100DataModule
 
 
 class FerModel(nn.Module):
-    def __init__(self, model_name):
+    def __init__(self, model_name, num_classes=7):
         super(FerModel, self).__init__()
         self.backbone = timm.create_model(model_name=model_name, pretrained=False, features_only=True)
         self.backbone.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
         self.backbone.maxpool = nn.Identity()
 
-        self.adapter1 = AdapterResnet1(SepConv, CBAM, num_classes = 7, pool_size=(1, 1))
-        self.adapter2 = AdapterResnet2(SepConv, CBAM, num_classes = 7, pool_size=(1, 1))
-        self.adapter3 = AdapterResnet3(SepConv, CBAM, num_classes=7, pool_size=(1, 1))
+        self.adapter1 = AdapterResnet1(SepConv, CBAM, num_classes = num_classes, pool_size=(1, 1))
+        self.adapter2 = AdapterResnet2(SepConv, CBAM, num_classes = num_classes, pool_size=(1, 1))
+        self.adapter3 = AdapterResnet3(SepConv, CBAM, num_classes=num_classes, pool_size=(1, 1))
 
 
-        self.classifier = CustomHead(in_planes=512, num_classes=7, pool_size=(1, 1))
+        self.classifier = CustomHead(in_planes=512, num_classes=num_classes, pool_size=(1, 1))
     def forward(self, x):
         x = self.backbone(x)
         fea1 = x[1]#16x16
@@ -101,7 +101,7 @@ class LightningFerModel(L.LightningModule):
         predicted_labels = []
         for i in range(3):
             loss += F.cross_entropy(logits[i], true_labels)* (1-self.loss_alpha)
-            loss_value, kd_loss = KDLoss(temp=self.distil_temp, alpha=self.loss_alpha)(logits[i], logits[3].detach())   
+            kd_loss = DistilKL(loss_alpha=self.distil_temp)(logits[i], logits[3].detach())   
             loss += kd_loss
 
             predicted_labels.append(torch.argmax(logits[i], dim=1))
@@ -175,13 +175,15 @@ class LightningFerModel(L.LightningModule):
 
 ImageNetMEAN = [0.485, 0.456, 0.406]
 ImageNetSTD = [0.229, 0.224, 0.225]
+CIFAR100MEAN = [0.5071, 0.4867, 0.4408]
+CIFAR100STD = [0.2675, 0.2565, 0.2761]
 def train():
     train_transform = transforms.Compose(
         [
-            transforms.Resize(48),
+            transforms.Resize(32),
             transforms.RandomHorizontalFlip(),
             # transforms.RandomApply([transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
-            transforms.TrivialAugmentWide(),
+            transforms.AutoAugment(policy=transforms.AutoAugmentPolicy.CIFAR10),
             transforms.ToTensor(),
             transforms.Normalize(ImageNetMEAN, ImageNetSTD),
             
@@ -189,15 +191,23 @@ def train():
     )
     test_transform = transforms.Compose(
         [
-            transforms.Resize(48),
+            transforms.Resize(32),
             transforms.ToTensor(),
             transforms.Normalize(ImageNetMEAN, ImageNetSTD),
         ]
     )
     L.seed_everything(2024)
-    dm = Fer2013DataModule(
-        data_path="/kaggle/input/fer2013/train",
-        test_path="/kaggle/input/fer2013/test",
+    # dm = Fer2013DataModule(
+    #     data_path="/kaggle/input/fer2013/train",
+    #     test_path="/kaggle/input/fer2013/test",
+    #     height_width=(32,32),
+    #     batch_size=256, 
+    #     train_transform=train_transform, 
+    #     test_transform=test_transform,
+    #     num_workers=4
+    # )
+    dm = Cifar100DataModule(
+        data_path="/kaggle/input/cifar100",
         height_width=(32,32),
         batch_size=256, 
         train_transform=train_transform, 

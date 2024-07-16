@@ -203,7 +203,7 @@ def train(model_name="resnet18",dataset_name="fer2013",batch_size=128,target_siz
     }
     # model = Resnet34Fer(model_name=model_name,pretrained=False, num_classes=num_classes)
     model = FGW(in_channels=3, num_classes=num_classes)
-    lightning_model = LightningFer(model=model, learning_rate=0.001,num_classes=num_classes)
+    lightning_model = LightningFer(model=model, learning_rate=0.001,num_classes=num_classes,other_hyperparameters=hyper_params)
 
     trainer = L.Trainer(
         max_epochs=100,
