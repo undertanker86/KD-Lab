@@ -24,9 +24,9 @@ class MoE_ResNet18(nn.Module):
         super(MoE_ResNet18, self).__init__()
         
         # Load pre-trained ResNet-18 model
-        self.resnet = timm.create_model(model_name='resnet18', pretrained=False, features_only=True)
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
-        self.maxpool = nn.Identity()
+        self.backbone = timm.create_model(model_name='resnet18', pretrained=False, features_only=True)
+        self.backbone.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        self.backbone.maxpool = nn.Identity()
         # Remove the fully connected layer
         
         # Create classifiers for each layer
@@ -42,7 +42,7 @@ class MoE_ResNet18(nn.Module):
     
     def forward(self, x):
         # Layer outputs
-        x = self.resnet(x)
+        x = self.backbone(x)
         layer1_output = x[1]
         layer2_output = x[2]
         layer3_output = x[3]
@@ -78,4 +78,5 @@ if __name__ == '__main__':
     # Example input
     x = torch.randn(1, 3, 224, 224)
     output = model(x)
-    print(output)
+    print(model)
+    # print(output)
