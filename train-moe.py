@@ -145,7 +145,6 @@ class LightningFerModel(L.LightningModule):
 def train():
     CIFAR100MEAN = [0.5071, 0.4867, 0.4408]
     CIFAR100STD = [0.2675, 0.2565, 0.2761]
-    model = LightningFerModel()
     train_transform = transforms.Compose(
         [
             transforms.Resize(32),
@@ -173,8 +172,8 @@ def train():
         test_transform=test_transform,
         num_workers=4
     )
-    # pytorch_model = FerModel(model_name='resnet18')
-    lightning_model = LightningFerModel(model=MoE_ResNet18(num_classes=100),learning_rate=0.1, optimizer="adamW",num_classes=100, lr_scheduler="cosine_annealingLR", max_epoch=250, loss_alpha=0.5, distil_temp=4.0)
+    pytorch_model = MoE_ResNet18(num_classes=100)
+    lightning_model = LightningFerModel(model=pytorch_model,learning_rate=0.1, optimizer="adamW",num_classes=100, lr_scheduler="cosine_annealingLR", max_epoch=250, loss_alpha=0.5, distil_temp=4.0)
     callbacks = [ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc4"), LearningRateMonitor(logging_interval="epoch")]
 
     trainer = L.Trainer(
