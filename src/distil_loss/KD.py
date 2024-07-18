@@ -11,7 +11,7 @@ class DistilKL(nn.Module):
     def forward(self, y_s:torch.Tensor, y_t:torch.Tensor):
         p_s = F.log_softmax(y_s/self.T, dim=1)
         p_t = F.softmax(y_t/self.T, dim=1)
-        loss = F.kl_div(p_s, p_t, reduction='batchmean')/y_s.shape[0]
+        loss = nn.KLDivLoss(reduction='batchmean')(p_s, p_t)*self.T*self.T
         return loss
     
     

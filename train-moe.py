@@ -148,9 +148,10 @@ def train():
     train_transform = transforms.Compose(
         [
             transforms.Resize(32),
-            # transforms.RandomHorizontalFlip(),
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
             # transforms.RandomApply([transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
-            transforms.AutoAugment(policy=transforms.AutoAugmentPolicy.CIFAR10),
+            transforms.TrivialAugmentWide(),
             transforms.ToTensor(),
             transforms.Normalize(CIFAR100MEAN, CIFAR100STD),
             
@@ -173,7 +174,7 @@ def train():
         num_workers=4
     )
     pytorch_model = MoE_ResNet18(num_classes=100)
-    lightning_model = LightningFerModel(model=pytorch_model,learning_rate=0.1, optimizer="adamW",num_classes=100, lr_scheduler="cosine_annealingLR", max_epoch=250, loss_alpha=0.5, distil_temp=4.0)
+    lightning_model = LightningFerModel(model=pytorch_model,learning_rate=0.1, optimizer="sgd",num_classes=100, lr_scheduler="cosine_annealingLR", max_epoch=250, loss_alpha=0.5, distil_temp=4.0)
     callbacks = [ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc4"), LearningRateMonitor(logging_interval="epoch")]
 
     trainer = L.Trainer(
@@ -189,7 +190,7 @@ def train():
     )
 
     trainer.fit(model=lightning_model, datamodule=dm)
-    trainer.test(lightning_model, datamodule=dm,ckpt_path='best')
+    # trainer.test(lightning_model, datamodule=dm,ckpt_path='best')
 
 if __name__ == '__main__':
     train()
