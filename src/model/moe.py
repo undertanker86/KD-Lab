@@ -70,12 +70,12 @@ class MoE_ResNet18(nn.Module):
         expert_outputs = torch.stack((out1, out2, out3, out4), dim=1)
         final_output = torch.sum(expert_outputs * gating_weights.unsqueeze(-1), dim=1)
         
-        return final_output
+        return out1, out2, out3, out4,final_output 
+if __name__ == '__main__':
+    # Create the model
+    model = MoE_ResNet18(num_classes=10)
 
-# Create the model
-model = MoE_ResNet18(num_classes=10)
-
-# Example input
-x = torch.randn(1, 3, 224, 224)
-output = model(x)
-print(output)
+    # Example input
+    x = torch.randn(1, 3, 224, 224)
+    output = model(x)
+    print(output)

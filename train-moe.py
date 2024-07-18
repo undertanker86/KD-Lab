@@ -1,10 +1,4 @@
-import argparse
-import os
-import sys
-
-# import pytorch_lightning as pl
 import lightning as L
-
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
@@ -14,38 +8,10 @@ import timm
 import torchmetrics
 from torchvision import datasets, transforms
 from torchvision.transforms import v2 as v2_transforms
-
 from src.distil_loss import DistilKL, Similarity, KDLoss
-from src.model import AdapterResnet1, AdapterResnet2 ,AdapterResnet3, SepConv, CustomHead, Block
+from src.model import AdapterResnet1, AdapterResnet2 ,AdapterResnet3, SepConv, CustomHead, Block, MoE_ResNet18
 from src.customblock import CBAM
 from helper import Fer2013DataModule , Cifar100DataModule
-
-
-class FerModel(nn.Module):
-    def __init__(self, model_name, num_classes=7):
-        super(FerModel, self).__init__()
-        self.backbone = timm.create_model(model_name=model_name, pretrained=False, features_only=True)
-        self.backbone.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
-        self.backbone.maxpool = nn.Identity()
-
-        self.adapter1 = AdapterResnet1(SepConv, CBAM, num_classes = num_classes, pool_size=(1, 1))
-        self.adapter2 = AdapterResnet2(SepConv, CBAM, num_classes = num_classes, pool_size=(1, 1))
-        self.adapter3 = AdapterResnet3(SepConv, CBAM, num_classes=num_classes, pool_size=(1, 1))
-
-
-        self.classifier = CustomHead(in_planes=512, num_classes=num_classes, pool_size=(1, 1))
-    def forward(self, x):
-        x = self.backbone(x)
-        fea1 = x[1]#16x16
-        fea2 = x[2]#8x8
-        fea3 = x[3]#4x4
-        logit1 = self.adapter1(fea1)
-        logit2 = self.adapter2(fea2)
-        logit3 = self.adapter3(fea3)
-        logit4 = self.classifier(x[4])
-        return [logit1, logit2, logit3, logit4],[fea1, fea2, fea3, x[4]]
-
-
 
 class LightningFerModel(L.LightningModule):
     def __init__(
@@ -86,36 +52,36 @@ class LightningFerModel(L.LightningModule):
         self.save_hyperparameters(ignore=["model"])
 
 
-        for i in range(4):
+        for i in range(5):
             self.__setattr__(f"train_acc{i+1}", torchmetrics.Accuracy(task="multiclass", num_classes=num_classes))  # type: ignore
             self.__setattr__(f"val_acc{i+1}", torchmetrics.Accuracy(task="multiclass", num_classes=num_classes))  # type: ignore
             self.__setattr__(f"test_acc{i+1}", torchmetrics.Accuracy(task="multiclass", num_classes=num_classes))  # type: ignore
-        
+        self.f1 = torchmetrics.F1Score(task="multiclass", num_classes=num_classes)
+        self.recall = torchmetrics.Recall(task="multiclass", num_classes=num_classes)
     def forward(self, x):
         return self.model(x)
 
     def _shared_step(self, batch):
         features, true_labels = batch
-        logits, fea = self(features)
-        loss = F.cross_entropy(logits[3], true_labels)
+        logits = self(features)
+        loss = F.cross_entropy(logits[4], true_labels)
         predicted_labels = []
-        for i in range(3):
+        for i in range(4):
             loss += F.cross_entropy(logits[i], true_labels)* (1-self.loss_alpha)
-            kd_loss = DistilKL(loss_alpha=self.distil_temp)(logits[i], logits[3].detach())   
+            kd_loss = DistilKL(loss_alpha=self.distil_temp)(logits[i], logits[4])   
             loss += kd_loss
 
             predicted_labels.append(torch.argmax(logits[i], dim=1))
         
-        predicted_labels.append(torch.argmax(logits[3], dim=1))
+        predicted_labels.append(torch.argmax(logits[4], dim=1))
         # loss = F.cross_entropy(logits, true_labels)
         # predicted_labels = torch.argmax(logits, dim=1)
         return loss, true_labels, predicted_labels
 
     def training_step(self, batch, batch_idx):
         loss, true_labels, predicted_labels = self._shared_step(batch)
-
         self.log("train_loss", loss)
-        for i in range(4):
+        for i in range(5):
             self.log(f"train_acc{i+1}", self.__getattr__(f"train_acc{i+1}")(predicted_labels[i], true_labels),on_epoch=True ,on_step=False, sync_dist=True)
 
         return loss
@@ -124,14 +90,17 @@ class LightningFerModel(L.LightningModule):
         loss, true_labels, predicted_labels = self._shared_step(batch)
 
         self.log("val_loss", loss, prog_bar=True)
-        for i in range(4):
+        for i in range(5):
             self.log(f"val_acc{i+1}", self.__getattr__(f"val_acc{i+1}")(predicted_labels[i], true_labels),on_epoch=True ,on_step=False, sync_dist=True)
+            
         return loss
 
     def test_step(self, batch, batch_idx):
         loss, true_labels, predicted_labels = self._shared_step(batch)
-        for i in range(4):
+        for i in range(5):
             self.log(f"test_acc{i+1}", self.__getattr__(f"test_acc{i+1}")(predicted_labels[i], true_labels),on_epoch=True, on_step=False, sync_dist=True)
+        self.log("F1 score", self.f1(predicted_labels[4], true_labels),on_epoch=True, on_step=False, sync_dist=True)
+        self.log("Recall", self.recall(predicted_labels[4], true_labels),on_epoch=True, on_step=False, sync_dist=True)
         return loss
 
     def configure_optimizers(self):
@@ -173,11 +142,10 @@ class LightningFerModel(L.LightningModule):
 
         return [optimizer], [scheduler]
 
-ImageNetMEAN = [0.485, 0.456, 0.406]
-ImageNetSTD = [0.229, 0.224, 0.225]
-CIFAR100MEAN = [0.5071, 0.4867, 0.4408]
-CIFAR100STD = [0.2675, 0.2565, 0.2761]
 def train():
+    CIFAR100MEAN = [0.5071, 0.4867, 0.4408]
+    CIFAR100STD = [0.2675, 0.2565, 0.2761]
+    model = LightningFerModel()
     train_transform = transforms.Compose(
         [
             transforms.Resize(32),
@@ -185,7 +153,7 @@ def train():
             # transforms.RandomApply([transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
             transforms.AutoAugment(policy=transforms.AutoAugmentPolicy.CIFAR10),
             transforms.ToTensor(),
-            transforms.Normalize(ImageNetMEAN, ImageNetSTD),
+            transforms.Normalize(CIFAR100MEAN, CIFAR100STD),
             
         ]
     )
@@ -193,19 +161,10 @@ def train():
         [
             transforms.Resize(32),
             transforms.ToTensor(),
-            transforms.Normalize(ImageNetMEAN, ImageNetSTD),
+            transforms.Normalize(CIFAR100MEAN, CIFAR100STD),
         ]
     )
     L.seed_everything(2024)
-    # dm = Fer2013DataModule(
-    #     data_path="/kaggle/input/fer2013/train",
-    #     test_path="/kaggle/input/fer2013/test",
-    #     height_width=(32,32),
-    #     batch_size=256, 
-    #     train_transform=train_transform, 
-    #     test_transform=test_transform,
-    #     num_workers=4
-    # )
     dm = Cifar100DataModule(
         data_path="./",
         height_width=(32,32),
@@ -214,12 +173,12 @@ def train():
         test_transform=test_transform,
         num_workers=4
     )
-    pytorch_model = FerModel(model_name='resnet18')
-    lightning_model = LightningFerModel(model=pytorch_model, learning_rate=0.1, optimizer="adamW", lr_scheduler="cosine_annealingLR", max_epoch=200)
+    # pytorch_model = FerModel(model_name='resnet18')
+    lightning_model = LightningFerModel(model=MoE_ResNet18(num_classes=100),learning_rate=0.1, optimizer="adamW",num_classes=100, lr_scheduler="cosine_annealingLR", max_epoch=250, loss_alpha=0.5, distil_temp=4.0)
     callbacks = [ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc4"), LearningRateMonitor(logging_interval="epoch")]
 
     trainer = L.Trainer(
-        max_epochs=200,
+        max_epochs=250,
         accelerator="gpu",
         devices=2,
         strategy="ddp",
@@ -232,7 +191,6 @@ def train():
 
     trainer.fit(model=lightning_model, datamodule=dm)
     trainer.test(lightning_model, datamodule=dm,ckpt_path='best')
-
 
 if __name__ == '__main__':
     train()
