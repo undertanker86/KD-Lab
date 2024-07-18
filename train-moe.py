@@ -68,7 +68,7 @@ class LightningFerModel(L.LightningModule):
         predicted_labels = []
         for i in range(4):
             loss += F.cross_entropy(logits[i], true_labels)* (1-self.loss_alpha)
-            kd_loss = DistilKL(loss_alpha=self.distil_temp)(logits[i], logits[4])   
+            kd_loss = DistilKL(T=self.distil_temp)(logits[i], logits[4])   
             loss += kd_loss
 
             predicted_labels.append(torch.argmax(logits[i], dim=1))

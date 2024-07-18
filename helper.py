@@ -1,5 +1,6 @@
 import lightning as L
 import torch
+from torch.utils.data import Subset
 import torch.nn.functional as F
 import torchmetrics
 from torchvision.datasets import ImageFolder
@@ -297,22 +298,20 @@ class FerPlusDataModule(L.LightningDataModule):
                 ]
             )
             return None
-        
+ 
     def setup(self, stage=None):
-        self.train = datasets.ImageFolder(
-            root=self.data_path,
-            transform=self.train_transform
-        )
+        dataset = datasets.ImageFolder(root=self.data_path)
+        class_to_idx = dataset.class_to_idx
+        idx = [i for i in range(len(dataset)) if class_to_idx[dataset.imgs[i][1]] != class_to_idx['contempt']]
+        self.train = Subset(dataset, idx)
 
-        self.val = datasets.ImageFolder(
-            root=self.val_path,
-            transform=self.test_transform
-        )
+        val_dataset = datasets.ImageFolder(root=self.val_path, transform=self.test_transform)
+        val_idx = [i for i in range(len(val_dataset)) if class_to_idx[val_dataset.imgs[i][1]] != class_to_idx['contempt']]
+        self.val = Subset(val_dataset, val_idx)
 
-        self.test = datasets.ImageFolder(
-            root=self.test_path,
-            transform=self.test_transform
-        )
+        test_dataset = datasets.ImageFolder(root=self.test_path, transform=self.test_transform)
+        test_idx = [i for i in range(len(test_dataset)) if class_to_idx[test_dataset.imgs[i][1]] != class_to_idx['contempt']]
+        self.test = Subset(test_dataset, test_idx)
 
     def train_dataloader(self):
         train_loader = DataLoader(
