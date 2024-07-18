@@ -136,7 +136,7 @@ class Cifar100DataModule(L.LightningDataModule):
             download=False,
         )
 
-        self.val = datasets.CIFAR100(
+        self.valid = datasets.CIFAR100(
             root=self.data_path,
             train=False,
             transform=self.test_transform,
