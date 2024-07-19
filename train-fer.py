@@ -28,9 +28,9 @@ class FerModel(nn.Module):
         self.backbone.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
         self.backbone.maxpool = nn.Identity()
 
-        self.adapter1 = AdapterResnet1(SepConv, CBAM, num_classes = num_classes, pool_size=(1, 1))
-        self.adapter2 = AdapterResnet2(SepConv, CBAM, num_classes = num_classes, pool_size=(1, 1))
-        self.adapter3 = AdapterResnet3(SepConv, CBAM, num_classes=num_classes, pool_size=(1, 1))
+        self.adapter1 = AdapterResnet1(Block, CBAM, num_classes = num_classes, pool_size=(1, 1))
+        self.adapter2 = AdapterResnet2(Block, CBAM, num_classes = num_classes, pool_size=(1, 1))
+        self.adapter3 = AdapterResnet3(Block, CBAM, num_classes=num_classes, pool_size=(1, 1))
 
 
         self.classifier = CustomHead(in_planes=512, num_classes=num_classes, pool_size=(1, 1))
@@ -57,7 +57,8 @@ class LightningFerModel(L.LightningModule):
         max_epoch: int,
         num_classes: int = 100,  # type: int
         loss_alpha: float = 0.3,  # type: float
-        distil_temp: float = 4.0  # type: float
+        distil_temp: float = 3.0,  # type: float
+        feature_weight: float = 0.03
     ) -> None:
         """
         Initialize a LightningFerModel object.
@@ -71,7 +72,7 @@ class LightningFerModel(L.LightningModule):
             num_classes (int, optional): The number of classes for the model. Defaults to 7.
             loss_alpha (float, optional): The alpha value for the loss function. Defaults to 0.3.
             distil_temp (float, optional): The temperature value for the distillation loss. Defaults to 3.0.
-
+            feature_weight (float, optional): The weight value for the feature loss. Defaults to 0.03.
         Returns:
             None
         """
@@ -83,6 +84,7 @@ class LightningFerModel(L.LightningModule):
         self.learning_rate = learning_rate
         self.loss_alpha = loss_alpha
         self.distil_temp = distil_temp
+        self.feature_weight = feature_weight
         self.save_hyperparameters(ignore=["model"])
 
 
@@ -101,9 +103,10 @@ class LightningFerModel(L.LightningModule):
         predicted_labels = []
         for i in range(3):
             loss += F.cross_entropy(logits[i], true_labels)* (1-self.loss_alpha)
-            kd_loss = DistilKL(loss_alpha=self.distil_temp)(logits[i], logits[3].detach())   
+            kd_loss = DistilKL(loss_alpha=self.distil_temp)(logits[i], logits[3].detach())*self.loss_alpha   
             loss += kd_loss
-
+            feature_loss = torch.dist(fea[i], fea[3].detach(), 2)
+            loss += feature_loss*self.feature_weight
             predicted_labels.append(torch.argmax(logits[i], dim=1))
         
         predicted_labels.append(torch.argmax(logits[3], dim=1))
@@ -181,9 +184,7 @@ def train():
     train_transform = transforms.Compose(
         [
             transforms.Resize(32),
-            # transforms.RandomHorizontalFlip(),
-            # transforms.RandomApply([transforms.RandomAffine(0, translate=(0.2, 0.2))], p=0.5),
-            transforms.AutoAugment(policy=transforms.AutoAugmentPolicy.CIFAR10),
+            transforms.TrivialAugmentWide(),
             transforms.ToTensor(),
             transforms.Normalize(ImageNetMEAN, ImageNetSTD),
             
@@ -214,8 +215,8 @@ def train():
         test_transform=test_transform,
         num_workers=4
     )
-    pytorch_model = FerModel(model_name='resnet18')
-    lightning_model = LightningFerModel(model=pytorch_model, learning_rate=0.1, optimizer="adamW", lr_scheduler="cosine_annealingLR", max_epoch=200)
+    pytorch_model = FerModel(model_name='resnet34',num_classes=100)
+    lightning_model = LightningFerModel(model=pytorch_model, learning_rate=0.1, optimizer="adamW", lr_scheduler="cosine_annealingLR", max_epoch=300)
     callbacks = [ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc4"), LearningRateMonitor(logging_interval="epoch")]
 
     trainer = L.Trainer(
@@ -235,4 +236,5 @@ def train():
 
 
 if __name__ == '__main__':
+    
     train()
