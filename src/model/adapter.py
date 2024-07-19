@@ -122,8 +122,8 @@ class AdapterResnet2(nn.Module):
         else:
             self.attention = nn.Identity()
         self.scalenet = nn.Sequential(
-            block(self.expand[0], self.expand[1], stride=2),
-            block(self.expand[1], self.expand[2], stride=2),
+            block(self.expand[0], self.expand[1]),
+            block(self.expand[1], self.expand[2]),
         )
         self.head = CustomHead(self.expand[2], num_classes, pool_size=pool_size)
 
@@ -150,7 +150,7 @@ class AdapterResnet3(nn.Module):
         else:
             self.attention = nn.Identity()
         self.scalenet = nn.Sequential(
-            block(self.expand[0], self.expand[1], stride=2),
+            block(self.expand[0], self.expand[1]),
         )
         self.head = CustomHead(self.expand[1], num_classes, pool_size=pool_size)
 
