@@ -216,16 +216,16 @@ def train():
         num_workers=4
     )
     pytorch_model = FerModel(model_name='resnet34',num_classes=100)
-    lightning_model = LightningFerModel(model=pytorch_model, learning_rate=0.1, optimizer="adamW", lr_scheduler="cosine_annealingLR", max_epoch=300)
+    lightning_model = LightningFerModel(model=pytorch_model, learning_rate=0.1, optimizer="sgd", lr_scheduler="cosine_annealingLR", max_epoch=300)
     callbacks = [ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc4"), LearningRateMonitor(logging_interval="epoch")]
 
     trainer = L.Trainer(
-        max_epochs=200,
+        max_epochs=300,
         accelerator="gpu",
         devices=2,
         strategy="ddp",
         callbacks=callbacks,
-        log_every_n_steps=100,
+        log_every_n_steps=10,
         logger=WandbLogger(project="BYOT"),
         # deterministic=True,
         # enable_model_summary=True
