@@ -71,15 +71,18 @@ class SepConv(nn.Module):
     
 
 class CustomHead(nn.Module):
-    def __init__(self, in_planes, num_classes, pool_size):
+    def __init__(self, in_planes, num_classes, pool_size,features=False):
         super(CustomHead, self).__init__()
+        self.features = features
         self.pool = nn.AdaptiveAvgPool2d(pool_size)
         self.fc = nn.Linear(in_planes * pool_size[0] * pool_size[1], num_classes)
 
     def forward(self, x):
         x = self.pool(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
+        fea = x.view(x.size(0), -1)
+        x = self.fc(fea)
+        if self.features:
+            return x, fea
         return x
     
 
@@ -98,7 +101,7 @@ class AdapterResnet1(nn.Module):
             block(self.expand[1], self.expand[2]),
             block(self.expand[2], self.expand[3]),
         )
-        self.head = CustomHead(self.expand[3], num_classes, pool_size=pool_size)
+        self.head = CustomHead(self.expand[3], num_classes, pool_size=pool_size,features=features)
 
     def forward(self, x):
         if self.attention is not None:
@@ -107,7 +110,7 @@ class AdapterResnet1(nn.Module):
         else:
             fea = x
         fea = self.scalenet(fea)
-        out = self.head(fea)
+        out,fea = self.head(fea)
         if self.features:
             return out, fea
         return out
@@ -125,7 +128,7 @@ class AdapterResnet2(nn.Module):
             block(self.expand[0], self.expand[1]),
             block(self.expand[1], self.expand[2]),
         )
-        self.head = CustomHead(self.expand[2], num_classes, pool_size=pool_size)
+        self.head = CustomHead(self.expand[2], num_classes, pool_size=pool_size,features=features)
 
     def forward(self, x):
         if self.attention is not None:
@@ -134,7 +137,7 @@ class AdapterResnet2(nn.Module):
         else:
             fea = x
         fea = self.scalenet(fea)
-        out = self.head(fea)
+        out,fea = self.head(fea)
         if self.features:
             return out, fea
         return out
@@ -152,7 +155,7 @@ class AdapterResnet3(nn.Module):
         self.scalenet = nn.Sequential(
             block(self.expand[0], self.expand[1]),
         )
-        self.head = CustomHead(self.expand[1], num_classes, pool_size=pool_size)
+        self.head = CustomHead(self.expand[1], num_classes, pool_size=pool_size,features=features)
 
     def forward(self, x):
         if self.attention is not None:
@@ -161,7 +164,7 @@ class AdapterResnet3(nn.Module):
         else:
             fea = x
         fea = self.scalenet(fea)
-        out = self.head(fea)
+        out,fea = self.head(fea)
         if self.features:
             return out, fea
         return out

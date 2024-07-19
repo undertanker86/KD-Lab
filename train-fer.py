@@ -28,22 +28,22 @@ class FerModel(nn.Module):
         self.backbone.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
         self.backbone.maxpool = nn.Identity()
 
-        self.adapter1 = AdapterResnet1(Block, CBAM, num_classes = num_classes, pool_size=(1, 1))
-        self.adapter2 = AdapterResnet2(Block, CBAM, num_classes = num_classes, pool_size=(1, 1))
-        self.adapter3 = AdapterResnet3(Block, CBAM, num_classes=num_classes, pool_size=(1, 1))
+        self.adapter1 = AdapterResnet1(Block, CBAM, num_classes = num_classes, pool_size=(1, 1),features=True)
+        self.adapter2 = AdapterResnet2(Block, CBAM, num_classes = num_classes, pool_size=(1, 1),features=True)
+        self.adapter3 = AdapterResnet3(Block, CBAM, num_classes=num_classes, pool_size=(1, 1),features=True)
 
 
-        self.classifier = CustomHead(in_planes=512, num_classes=num_classes, pool_size=(1, 1))
+        self.classifier = CustomHead(in_planes=512, num_classes=num_classes, pool_size=(1, 1),features=True)
     def forward(self, x):
         x = self.backbone(x)
         fea1 = x[1]#16x16
         fea2 = x[2]#8x8
         fea3 = x[3]#4x4
-        logit1 = self.adapter1(fea1)
-        logit2 = self.adapter2(fea2)
-        logit3 = self.adapter3(fea3)
-        logit4 = self.classifier(x[4])
-        return [logit1, logit2, logit3, logit4],[fea1, fea2, fea3, x[4]]
+        logit1,f1 = self.adapter1(fea1)
+        logit2,f2 = self.adapter2(fea2)
+        logit3,f3 = self.adapter3(fea3)
+        logit4,f4 = self.classifier(x[4])
+        return [logit1, logit2, logit3, logit4],[f1, f2, f3, f4]
 
 
 
@@ -236,5 +236,5 @@ def train():
 
 
 if __name__ == '__main__':
-    
+
     train()
