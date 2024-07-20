@@ -262,22 +262,20 @@ def objective(trial):
         test_transform=test_transform,
         num_workers=4
     )
-    wandb_kwargs = {
-        "project": "BYOT",
-    }
+
     pytorch_model = FerModel(model_name='resnet18',num_classes=100)
     loss_alpha = trial.suggest_float("loss_alpha", 0.1, 0.9)
     distil_temp = trial.suggest_float("distil_temp", 1.0, 5.0)
     feature_weight = trial.suggest_float("feature_weight", 0.01, 0.1)
-    lightningmodel = LightningFerModel(model = pytorch_model, learning_rate=0.1, optimizer="sgd", lr_scheduler="cosine_annealingLR", max_epoch=300, num_classes=100, loss_alpha=loss_alpha, distil_temp=distil_temp, feature_weight=feature_weight)
+    lightningmodel = LightningFerModel(model = pytorch_model, learning_rate=0.1, optimizer="sgd", lr_scheduler="cosine_annealingLR", max_epoch=100, num_classes=100, loss_alpha=loss_alpha, distil_temp=distil_temp, feature_weight=feature_weight)
     Trainer = L.Trainer(
-        max_epochs=300,
+        max_epochs=100,
         accelerator="gpu",
         devices=2,
         strategy="ddp",
         callbacks=[ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc4"), LearningRateMonitor(logging_interval="epoch")],
         log_every_n_steps=10,
-        logger=WandbLogger(**wandb_kwargs),
+        # logger=WandbLogger(**wandb_kwargs),
         # deterministic=True,
         # enable_model_summary=True
     )
@@ -285,8 +283,13 @@ def objective(trial):
     return Trainer.callback_metrics["val_acc4"].item()
 
 if __name__ == '__main__':
+    wandb_kwargs = {
+        "project": "BYOT",
+    }
+    wandbc = WeightsAndBiasesCallback(metric_name="val_acc4",wandb_kwargs=wandb_kwargs)
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=4)
+    study.optimize(objective, n_trials=5, callbacks=[wandbc])
+    print("Number of finished trials: {}".format(len(study.trials)))
     print(study.best_trial)
     trial = study.best_trial
 
