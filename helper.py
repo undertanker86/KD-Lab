@@ -166,15 +166,7 @@ class Cifar100DataModule(L.LightningDataModule):
         )
         return valid_loader
 
-    def test_dataloader(self):
-        test_loader = DataLoader(
-            dataset=self.val,
-            batch_size=self.batch_size,
-            drop_last=False,
-            shuffle=False,
-            num_workers=self.num_workers,
-        )
-        return test_loader
+
 
 
 class Fer2013DataModule(L.LightningDataModule):

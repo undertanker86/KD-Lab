@@ -14,6 +14,8 @@ import timm
 import torchmetrics
 from torchvision import datasets, transforms
 from torchvision.transforms import v2 as v2_transforms
+import optuna
+from  optuna.integration.wandb import WeightsAndBiasesCallback
 
 from src.distil_loss import DistilKL, Similarity, KDLoss
 from src.model import AdapterResnet1, AdapterResnet2 ,AdapterResnet3, SepConv, CustomHead, Block
@@ -215,8 +217,8 @@ def train():
         test_transform=test_transform,
         num_workers=4
     )
-    pytorch_model = FerModel(model_name='resnet34',num_classes=100)
-    lightning_model = LightningFerModel(model=pytorch_model, learning_rate=0.1, optimizer="sgd", lr_scheduler="cosine_annealingLR", max_epoch=300)
+    pytorch_model = FerModel(model_name='resnet18',num_classes=100)
+    lightning_model = LightningFerModel(model=pytorch_model, learning_rate=0.1, optimizer="sgd", lr_scheduler="cosine_annealingLR", max_epoch=300, num_classes=100, loss_alpha=0.3, distil_temp=3.0, feature_weight=0.03)
     callbacks = [ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc4"), LearningRateMonitor(logging_interval="epoch")]
 
     trainer = L.Trainer(
@@ -234,7 +236,58 @@ def train():
     trainer.fit(model=lightning_model, datamodule=dm)
     trainer.test(lightning_model, datamodule=dm,ckpt_path='best')
 
+def objective(trial):
+    train_transform = transforms.Compose(
+        [
+            transforms.Resize(32),
+            transforms.TrivialAugmentWide(),
+            transforms.ToTensor(),
+            transforms.Normalize(ImageNetMEAN, ImageNetSTD),
+            
+        ]
+    )
+    test_transform = transforms.Compose(
+        [
+            transforms.Resize(32),
+            transforms.ToTensor(),
+            transforms.Normalize(ImageNetMEAN, ImageNetSTD),
+        ]
+    )
+    L.seed_everything(2024)
+    dm = Cifar100DataModule(
+        data_path="./",
+        height_width=(32,32),
+        batch_size=512, 
+        train_transform=train_transform, 
+        test_transform=test_transform,
+        num_workers=4
+    )
+    wandb_kwargs = {
+        "project": "BYOT",
+    }
+    pytorch_model = FerModel(model_name='resnet18',num_classes=100)
+    loss_alpha = trial.suggest_float("loss_alpha", 0.1, 0.9)
+    distil_temp = trial.suggest_float("distil_temp", 1.0, 5.0)
+    feature_weight = trial.suggest_float("feature_weight", 0.01, 0.1)
+    lightningmodel = LightningFerModel(model = pytorch_model, learning_rate=0.1, optimizer="sgd", lr_scheduler="cosine_annealingLR", max_epoch=300, num_classes=100, loss_alpha=loss_alpha, distil_temp=distil_temp, feature_weight=feature_weight)
+    Trainer = L.Trainer(
+        max_epochs=300,
+        accelerator="gpu",
+        devices=2,
+        strategy="ddp",
+        callbacks=[ModelCheckpoint(save_top_k=1, mode="max", monitor="val_acc4"), LearningRateMonitor(logging_interval="epoch")],
+        log_every_n_steps=10,
+        logger=WandbLogger(**wandb_kwargs),
+        # deterministic=True,
+        # enable_model_summary=True
+    )
+    Trainer.fit(model=lightningmodel, datamodule=dm)
+    return Trainer.callback_metrics["val_acc4"].item()
 
 if __name__ == '__main__':
+    study = optuna.create_study(direction="maximize")
+    study.optimize(objective, n_trials=4)
+    print(study.best_trial)
+    trial = study.best_trial
 
-    train()
+    print("Best trial: score {}, params {}".format(trial.value, trial.params))

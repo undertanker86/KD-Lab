@@ -3,4 +3,4 @@ wandb
 torch
 torchvision
 timm
-detectors
+optuna
