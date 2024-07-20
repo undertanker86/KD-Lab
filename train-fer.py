@@ -15,7 +15,7 @@ import torchmetrics
 from torchvision import datasets, transforms
 from torchvision.transforms import v2 as v2_transforms
 import optuna
-from  optuna.integration.wandb import WeightsAndBiasesCallback
+# from  optuna.integration.wandb import WeightsAndBiasesCallback
 
 from src.distil_loss import DistilKL, Similarity, KDLoss
 from src.model import AdapterResnet1, AdapterResnet2 ,AdapterResnet3, SepConv, CustomHead, Block
@@ -283,12 +283,12 @@ def objective(trial):
     return Trainer.callback_metrics["val_acc4"].item()
 
 if __name__ == '__main__':
-    wandb_kwargs = {
-        "project": "BYOT",
-    }
-    wandbc = WeightsAndBiasesCallback(metric_name="val_acc4",wandb_kwargs=wandb_kwargs)
+    # wandb_kwargs = {
+    #     "project": "BYOT",
+    # }
+    # wandbc = WeightsAndBiasesCallback(metric_name="val_acc4",wandb_kwargs=wandb_kwargs)
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=5, callbacks=[wandbc])
+    study.optimize(objective, n_trials=5)
     print("Number of finished trials: {}".format(len(study.trials)))
     print(study.best_trial)
     trial = study.best_trial
