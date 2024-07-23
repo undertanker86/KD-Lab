@@ -186,9 +186,9 @@ def train():
     train_transform = transforms.Compose(
         [
             transforms.Resize(32),
-            transforms.TrivialAugmentWide(),
+            transforms.AutoAugment(policy=transforms.AutoAugmentPolicy.CIFAR10),
             transforms.ToTensor(),
-            transforms.Normalize(ImageNetMEAN, ImageNetSTD),
+            transforms.Normalize(CIFAR100MEAN, CIFAR100STD),
             
         ]
     )
@@ -196,7 +196,7 @@ def train():
         [
             transforms.Resize(32),
             transforms.ToTensor(),
-            transforms.Normalize(ImageNetMEAN, ImageNetSTD),
+            transforms.Normalize(CIFAR100MEAN, CIFAR100STD),
         ]
     )
     L.seed_everything(2024)
@@ -242,7 +242,7 @@ def objective(trial):
             transforms.Resize(32),
             transforms.TrivialAugmentWide(),
             transforms.ToTensor(),
-            transforms.Normalize(ImageNetMEAN, ImageNetSTD),
+            transforms.Normalize(CIFAR100MEAN, CIFAR100STD),
             
         ]
     )
@@ -250,7 +250,7 @@ def objective(trial):
         [
             transforms.Resize(32),
             transforms.ToTensor(),
-            transforms.Normalize(ImageNetMEAN, ImageNetSTD),
+            transforms.Normalize(CIFAR100MEAN, CIFAR100STD),
         ]
     )
     L.seed_everything(2024)
