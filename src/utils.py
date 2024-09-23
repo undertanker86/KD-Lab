@@ -11,12 +11,16 @@ import torch
 import torch.nn.init as init
 
 # This calculates the number of parameters in a model
+
+
 def cal_param_size(model):
     return sum([i.numel() for i in model.parameters()])
 
 
 count_ops = 0
 # This measures the number of operations in a model
+
+
 def measure_layer(layer, x, multi_add=1):
     delta_ops = 0
     type_name = str(layer)[:str(layer).find('(')].strip()
@@ -27,9 +31,9 @@ def measure_layer(layer, x, multi_add=1):
         out_w = int((x.size()[3] + 2 * layer.padding[1] - layer.kernel_size[1]) //
                     layer.stride[1] + 1)
         delta_ops = layer.in_channels * layer.out_channels * layer.kernel_size[0] *  \
-                layer.kernel_size[1] * out_h * out_w // layer.groups * multi_add
+            layer.kernel_size[1] * out_h * out_w // layer.groups * multi_add
 
-    ### ops_linear
+    # ops_linear
     elif type_name in ['Linear']:
         weight_ops = layer.weight.numel() * multi_add
         bias_ops = 0
@@ -52,7 +56,7 @@ def should_measure(module):
     return False
 
 
-def cal_multi_adds(model, shape=(2,3,32,32)):
+def cal_multi_adds(model, shape=(2, 3, 32, 32)):
     global count_ops
     count_ops = 0
     data = torch.zeros(shape)
@@ -84,5 +88,3 @@ def cal_multi_adds(model, shape=(2,3,32,32)):
     restore_forward(model)
 
     return count_ops
-
-

@@ -1,13 +1,16 @@
+
 import torch
 from torch import nn
 import torchvision.models as models
 from torch.nn import functional as F
 import sys
-sys.path.append('src')
+sys.path.append('D:/Code-AMinh-Conf/Self-distil/src')
 from customblock import ChannelAttention, SpatialAttention, CBAM, DepthwiseSeparableConv2d
 
+
+
 class TripleAuxResNet(nn.Module):
-    def __init__(self, resnet_model='resnet18',num_classes=100, pretrained=True):
+    def __init__(self, resnet_model='resnet18', num_classes=100, pretrained=True):
         super(TripleAuxResNet, self).__init__()
         if resnet_model == 'resnet18':
             self.pretrained_model = models.resnet18(pretrained=pretrained)
@@ -31,7 +34,7 @@ class TripleAuxResNet(nn.Module):
             DepthwiseSeparableConv2d(64*self.expansion, 128*self.expansion),
             DepthwiseSeparableConv2d(128*self.expansion, 256*self.expansion),
             DepthwiseSeparableConv2d(256*self.expansion, 512*self.expansion),
-            nn.AdaptiveAvgPool2d((1,1)),
+            nn.AdaptiveAvgPool2d((1, 1)),
         )
         self.classifier1_aux = nn.Linear(512*self.expansion, num_classes)
 
@@ -41,7 +44,7 @@ class TripleAuxResNet(nn.Module):
             CBAM(128*self.expansion),
             DepthwiseSeparableConv2d(128*self.expansion, 256*self.expansion),
             DepthwiseSeparableConv2d(256*self.expansion, 512*self.expansion),
-            nn.AdaptiveAvgPool2d((1,1)),
+            nn.AdaptiveAvgPool2d((1, 1)),
         )
         self.classifier2_aux = nn.Linear(512*self.expansion, num_classes)
 
@@ -50,7 +53,7 @@ class TripleAuxResNet(nn.Module):
             self.pretrained_model._modules['layer3'][0],
             CBAM(256*self.expansion),
             DepthwiseSeparableConv2d(256*self.expansion, 512*self.expansion),
-            nn.AdaptiveAvgPool2d((1,1)),
+            nn.AdaptiveAvgPool2d((1, 1)),
         )
         self.classifier3_aux = nn.Linear(512*self.expansion, num_classes)
 
@@ -60,8 +63,8 @@ class TripleAuxResNet(nn.Module):
         # self.pretrained_model._modules['layer3'] = self.layer3_aux
 
         # Final classification head (same as original ResNet)
-        self.avgpool = nn.AdaptiveAvgPool2d((1,1))
-        self.fc = nn.Linear(512*self.expansion , num_classes)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(512*self.expansion, num_classes)
 
     def forward(self, x):
         # Pass through pre-trained layers up to layer0 (conv1)
@@ -69,7 +72,7 @@ class TripleAuxResNet(nn.Module):
         out = self.pretrained_model.bn1(out)
         out = self.pretrained_model.relu(out)
         out = self.pretrained_model.maxpool(out)
-       
+
         # Auxiliary branch for layer1
         aux1 = self.layer1_aux(out)
         aux1 = aux1.view(aux1.size(0), -1)
@@ -77,7 +80,7 @@ class TripleAuxResNet(nn.Module):
 
         # Main branch through layer1
         out = self.pretrained_model.layer1(out)
-        
+
         # Auxiliary branch for layer2
         aux2 = self.layer2_aux(out)
         aux2 = aux2.view(aux2.size(0), -1)
@@ -99,7 +102,7 @@ class TripleAuxResNet(nn.Module):
         out4 = self.fc(out)
 
         return [out1, out2, out3, out4]
-    
+
 
 if __name__ == '__main__':
     x = torch.randn(2, 3, 32, 32)

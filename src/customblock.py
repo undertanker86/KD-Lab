@@ -6,6 +6,8 @@ from typing import Type, Any, Callable, Union, List, Optional
 # from https://github.com/changzy00/pytorch-attention/blob/master/cnns/mobilenetv1.py
 # Origin mobilenetv1 as v2 foward use inverted residual block
 # Make change for this to work with expansion
+
+
 class DepthwiseSeparableConv2d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1):
         super().__init__()
@@ -20,7 +22,7 @@ class DepthwiseSeparableConv2d(nn.Module):
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True)
         )
-    
+
     def forward(self, x):
         x = self.dwconv(x)
         x = self.pwconv(x)
@@ -57,14 +59,16 @@ class AttentionModule(nn.Module):
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
         )
-        self.upsample = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
+        self.upsample = nn.Upsample(
+            scale_factor=2, mode="bilinear", align_corners=True)
 
     def forward(self, x):
         residual = x
         out = self.dwconv(x)
         out = self.downsample(out)
         out = self.pwconv(out)
-        out = F.interpolate(out, scale_factor=2, mode="bilinear", align_corners=True)
+        out = F.interpolate(out, scale_factor=2,
+                            mode="bilinear", align_corners=True)
         out = self.upsample(out)
         # Dot product in the paper why though
         out = out @ residual
@@ -125,7 +129,8 @@ class ChannelAttention(nn.Module):
 class SpatialAttention(nn.Module):
     def __init__(self, kernel_size=7):
         super(SpatialAttention, self).__init__()
-        self.conv = nn.Conv2d(2, 1, kernel_size, padding=kernel_size // 2, bias=False)
+        self.conv = nn.Conv2d(
+            2, 1, kernel_size, padding=kernel_size // 2, bias=False)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
@@ -231,10 +236,10 @@ if __name__ == "__main__":
 
     # input_tensor = torch.rand(1,64,32,32)
     model = nn.Sequential(
-                DepthwiseSeparableConv2d(64*4, 128*4, kernel_size=1, stride=2),
-                DepthwiseSeparableConv2d(128*4, 256*4, kernel_size=1, stride=2),
-                DepthwiseSeparableConv2d(256*4, 512*4, kernel_size=1, stride=1),
-                )
+        DepthwiseSeparableConv2d(64*4, 128*4, kernel_size=1, stride=2),
+        DepthwiseSeparableConv2d(128*4, 256*4, kernel_size=1, stride=2),
+        DepthwiseSeparableConv2d(256*4, 512*4, kernel_size=1, stride=1),
+    )
     # output_tensor = model(input_tensor)
     # print(output_tensor.shape)
     # fc = nn.Sequential(

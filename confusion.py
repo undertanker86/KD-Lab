@@ -1,9 +1,8 @@
-from src.model import resnet18one
-
+from src.model import resnet18sa
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils import cal_param_size, cal_multi_adds
+from src.utils import cal_param_size, cal_multi_adds
 
 # from torchmetrics import ConfusionMatrix
 from sklearn.metrics import (
@@ -20,25 +19,24 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 from torchvision.io import read_image
 from torchvision.transforms.functional import to_pil_image, normalize, resize
-from torchcam.methods import GradCAM
-from torchcam.utils import overlay_mask
+# from torchcam.methods import GradCAM
+# from torchcam.utils import overlay_mask
 import matplotlib.pyplot as plt
 import numpy as np
 
 
 def collect_predictions(dataloader, model):
     all_labels = []
-    all_preds = {"out1": [], "out2": [], "out3": [], "out4": [], "x_m": []}
+    all_preds = {"out1": [], "out2": [], "out3": [], "out4": []}
 
     with torch.no_grad():
         for images, labels in dataloader:
-            [out4, out3, out2, out1, x_m], _ = model(images)
+            [out4, out3, out2, out1], _ = model(images)
             outputs = {
                 "out1": out1,
                 "out2": out2,
                 "out3": out3,
                 "out4": out4,
-                "x_m": x_m,
             }
             all_labels.extend(labels.cpu().numpy())
             for key in outputs:
@@ -64,22 +62,28 @@ def calculate_top1_error_rate(preds, labels):
 
 
 def main():
-    model = resnet18one()
+    model = resnet18sa()
     model_dict = model.state_dict()
-    pretrained_dict = torch.load("ckpt/resnet18-epoch164.pth")
-    pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+    pretrained_dict = torch.load(
+        "D:/Code-AMinh-Conf/resnet18-fer2013.pth")
+    pretrained_dict = {k: v for k,
+                       v in pretrained_dict.items() if k in model_dict}
     model_dict.update(pretrained_dict)
     model.load_state_dict(model_dict)
 
     model.eval()
-    classnames = ["angry", "disgust", "fear", "happy", "neutral", "sad", "surprise"]
-    from utils import cal_multi_adds, cal_param_size
+    classnames = ["angry", "disgust", "fear",
+                  "happy", "neutral", "sad", "surprise"]
+    # classnames = ["angry", "disgust", "fear", "happy", "neutral", "sad", "surprise"]
+    # from utils import cal_multi_adds, cal_param_size
 
     print(
         "Params: %.2fM, Multi-adds: %.3fM"
         % (cal_param_size(model) / 1e6, cal_multi_adds(model, (2, 3, 32, 32)) / 1e6)
     )
     target_size = 48
+    # mean = [0.5756, 0.4495, 0.4010]
+    # std = [0.2599, 0.2365, 0.2351]
     mean = 0
     std = 255
     transform = transforms.Compose(
@@ -91,9 +95,10 @@ def main():
     )
 
     # Load the dataset
-    data_dir = "test"
+    data_dir = "D:/Code-Conf/Self-distil/ferplus/test"
     dataset = ImageFolder(root=data_dir, transform=transform)
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=False, num_workers=4)
+    dataloader = DataLoader(dataset, batch_size=32,
+                            shuffle=False, num_workers=4)
 
     # Collect predictions
     all_labels, all_preds = collect_predictions(dataloader, model)
@@ -108,14 +113,16 @@ def main():
 
         f1 = f1_score(all_labels, all_preds[key], average="weighted")
         recall = recall_score(all_labels, all_preds[key], average="weighted")
-        precision = precision_score(all_labels, all_preds[key], average="weighted")
+        precision = precision_score(
+            all_labels, all_preds[key], average="weighted")
         top1_error_rate = calculate_top1_error_rate(all_preds[key], all_labels)
         fig, ax = plt.subplots(figsize=(10, 10))
         disp.plot(
             ax=ax, cmap="Blues", values_format=".2f"
         )  # 'Blues' colormap and format values to 2 decimal places
         plt.title(f"Normalized Confusion Matrix for {key}")
-        plt.savefig(f"images/confusion+/confusion_matrix_{key}.png")
+        plt.savefig(
+            f"D:/Code-Conf/result-ferplus-sonanh/confusion_matrix_{key}.png")
         plt.show()
 
         print(f"Metrics for {key}:")
@@ -128,6 +135,9 @@ def main():
         report = classification_report(
             all_labels, all_preds[key], target_names=classnames
         )
+        # df = pandas.DataFrame(report).transpose()
+        # df.to_csv(f"images/confusion+/classification_report_{key}.csv")
+
         print(f"Classification Report for {key}:\n{report}")
 
         # Calculate overall accuracy
@@ -139,25 +149,26 @@ def main():
         print(f"Top-1 Error Rate for {key}: {top1_error_rate:.4f}\n")
 
 
-def grad_cam(model, input_tensor, class_index, target_layer="model.backbone.layer4"):
-    with GradCAM(model, target_layer=target_layer) as cam_extractor:
-        out = model(input_tensor)[0][0]  # [out4, out3, out2, out1, x_m] as fc output
-        activation_map = cam_extractor(class_index, out)
-        return activation_map
+# def grad_cam(model, input_tensor, class_index, target_layer="model.backbone.layer4"):
+#     with GradCAM(model, target_layer=target_layer) as cam_extractor:
+#         # [out4, out3, out2, out1, x_m] as fc output
+#         out = model(input_tensor)[0][0]
+#         activation_map = cam_extractor(class_index, out)
+#         return activation_map
 
 
-def display_cam_overlay(image, activation_map):
-    image = image.squeeze(0)
-    result = overlay_mask(
-        to_pil_image(image),
-        to_pil_image(activation_map[0].squeeze(0), mode="F"),
-        alpha=0.5,
-    )
-    plt.imshow(result)
-    plt.axis("off")
-    plt.tight_layout()
-    plt.savefig("gradcam.png", dpi=300)
-    plt.show()
+# def display_cam_overlay(image, activation_map):
+#     image = image.squeeze(0)
+#     result = overlay_mask(
+#         to_pil_image(image),
+#         to_pil_image(activation_map[0].squeeze(0), mode="F"),
+#         alpha=0.5,
+#     )
+#     plt.imshow(result)
+#     plt.axis("off")
+#     plt.tight_layout()
+#     plt.savefig("gradcam.png", dpi=300)
+#     plt.show()
 
 
 if __name__ == "__main__":
